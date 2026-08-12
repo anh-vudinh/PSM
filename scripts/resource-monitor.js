@@ -1204,7 +1204,7 @@ function getLinuxGpu() {
     const info = getGpuInfo();
 
     if (
-        /Intel/i.test(info.name) &&
+        /Intel|UHD Graphics|Iris|HD Graphics/i.test(info.name) &&
         hasIntelGpuTop()
     ) {
         return getLinuxIntelGpu();
