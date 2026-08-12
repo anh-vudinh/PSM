@@ -91,6 +91,10 @@ function usage() {
     );
 
     console.error(
+    "  ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> \"<message>\""
+    );
+
+    console.error(
         "  ./psm-headless.js worlds restart <psm-world-id|all>"
     );
 
@@ -947,6 +951,171 @@ async function main() {
 
             if (subcommand === "list") {
                 await worldsList();
+                return;
+            }
+
+            if (subcommand === "graceful-stop") {
+                const worldId =
+                    process.argv[4];
+
+                const waittimeArg =
+                    process.argv[5];
+
+                const waittime =
+                    Number(waittimeArg);
+
+                const message =
+                    process.argv.slice(6).join(" ").trim();
+
+                if (!worldId) {
+                    console.error(
+                        "Missing PSM world ID"
+                    );
+
+                    console.error("");
+
+                    console.error(
+                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                if (
+                    waittimeArg === undefined ||
+                    waittimeArg === ""
+                ) {
+                    console.error(
+                        "Missing graceful stop waittime"
+                    );
+
+                    console.error("");
+
+                    console.error(
+                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                if (
+                    !Number.isFinite(waittime) ||
+                    !Number.isInteger(waittime) ||
+                    waittime < 1
+                ) {
+                    console.error(
+                        "Graceful stop waittime must be a positive whole number of seconds"
+                    );
+
+                    console.error("");
+
+                    console.error(
+                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                if (!message) {
+                    console.error(
+                        "Missing graceful stop message"
+                    );
+
+                    console.error("");
+
+                    console.error(
+                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                const response =
+                    await request({
+                        action: "graceful-stop",
+                        world_id: worldId,
+                        waittime:
+                            Number(waittime),
+                        message,
+                    });
+
+                if (!response.ok) {
+                    throw new Error(
+                        response.error ||
+                        "Failed to gracefully stop world"
+                    );
+                }
+
+                const result =
+                    response.result || {};
+
+                if (
+                    result.all &&
+                    Array.isArray(
+                        result.results
+                    )
+                ) {
+                    console.log(
+                        `Graceful shutdown scheduled for ${result.results.length} world(s)`
+                    );
+
+                    console.log("");
+
+                    for (
+                        const world of result.results
+                    ) {
+                        const displayName =
+                            world.display_name ||
+                            "Unknown World";
+
+                        const id =
+                            world.world_id ||
+                            "Unknown";
+
+                        console.log(
+                            `[${world.ok ? "OK" : "FAIL"}] ${displayName}`
+                        );
+
+                        console.log(
+                            `  World ID: ${id}`
+                        );
+
+                        if (world.ok) {
+                            console.log(
+                                `  Wait Time: ${world.result.waittime}s`
+                            );
+
+                            console.log(
+                                `  Message: ${world.result.message}`
+                            );
+                        } else {
+                            console.log(
+                                `  Error: ${world.error}`
+                            );
+                        }
+
+                        console.log("");
+                    }
+
+                    return;
+                }
+
+                console.log(
+                    "Graceful shutdown scheduled"
+                );
+
+                console.log(
+                    `Wait Time: ${result.waittime}s`
+                );
+
+                console.log(
+                    `Message: ${result.message}`
+                );
+
                 return;
             }
 
