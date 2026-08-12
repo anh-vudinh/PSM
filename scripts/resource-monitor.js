@@ -1177,9 +1177,9 @@ function getLinuxIntelGpu() {
                 "utf8"
             );
 
-            const match = gemOutput.match(
-                /^\s*\d+\s+shrinkable\s+\[\d+\s+free\]\s+(\d+)\s+bytes/m
-            );
+        const match = gemOutput.match(
+            /^\s*\d+\s+shrinkable\s+\[\d+\s+free\]\s+objects,\s+(\d+)\s+bytes/m
+        );
 
             if (match) {
                 shared = Number(match[1]);
