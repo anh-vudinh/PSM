@@ -10,11 +10,21 @@ function request(payload) {
         const socket = net.createConnection(SOCKET);
 
         let buffer = "";
+        let settled = false;
 
         socket.setEncoding("utf8");
 
+        function fail(error) {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            reject(error);
+        }
+
         socket.on("connect", () => {
-            socket.end(
+            socket.write(
                 JSON.stringify(payload) + "\n"
             );
         });
@@ -24,8 +34,12 @@ function request(payload) {
         });
 
         socket.on("end", () => {
+            if (settled) {
+                return;
+            }
+
             if (!buffer) {
-                reject(
+                fail(
                     new Error(
                         "PSM closed the connection without a response"
                     )
@@ -34,9 +48,10 @@ function request(payload) {
             }
 
             try {
+                settled = true;
                 resolve(JSON.parse(buffer));
             } catch (error) {
-                reject(
+                fail(
                     new Error(
                         `Invalid response from PSM: ${buffer}`
                     )
@@ -45,7 +60,7 @@ function request(payload) {
         });
 
         socket.on("error", (error) => {
-            reject(error);
+            fail(error);
         });
     });
 }
