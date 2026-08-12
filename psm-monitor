@@ -1,3 +1,4 @@
+bash
 #!/usr/bin/env bash
 
 set -u
@@ -110,41 +111,27 @@ stop_monitor() {
     echo "Resource monitor stopped."
 }
 
-status() {
-    if is_running; then
-        echo "Resource monitor is RUNNING."
-        echo "PID: $(cat "$PID_FILE")"
-    else
-        echo "Resource monitor is NOT running."
-    fi
-}
-
 usage() {
     echo "PSM Resource Monitor"
     echo
     echo "Usage:"
-    echo "  psm-monitor"
-    echo "  psm-monitor on"
-    echo "  psm-monitor off"
-    echo "  psm-monitor status"
+    echo "  psm-monitor start"
+    echo "  psm-monitor stop"
+    echo "  psm-monitor help"
     echo
     echo "Commands:"
-    echo "  on         Start live resource monitor"
-    echo "  off        Stop live resource monitor"
-    echo "  status     Show monitor status"
+    echo "  start      Start live resource monitor"
+    echo "  stop       Stop live resource monitor"
+    echo "  help       Show this help"
 }
 
-case "${1:-on}" in
-    on|start)
+case "${1:-}" in
+    start)
         start_monitor
         ;;
 
-    off|stop)
+    stop)
         stop_monitor
-        ;;
-
-    status)
-        status
         ;;
 
     help|-h|--help)
@@ -152,7 +139,7 @@ case "${1:-on}" in
         ;;
 
     *)
-        echo "Unknown command: $1"
+        echo "Unknown command: ${1:-}"
         echo
         usage
         exit 1

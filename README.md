@@ -75,8 +75,13 @@ psm-headless.js schedules disable <schedule_id>
 psm-headless.js broadcast <world_id> "<message>"
 ```
 
-- psm-monitor <command>
-> on, off, start, stop
+**RESOURCE MONITOR**
+
+```
+psm-monitor start
+psm-monitor stop
+psm-monitor help
+```
 
 > The Windows builds are not yet code-signed, so SmartScreen may show an
 > "unrecognized app" warning. Click **More info → Run anyway** to proceed.
