@@ -24,6 +24,15 @@ function request(payload) {
         });
 
         socket.on("end", () => {
+            if (!buffer) {
+                reject(
+                    new Error(
+                        "PSM closed the connection without a response"
+                    )
+                );
+                return;
+            }
+
             try {
                 resolve(JSON.parse(buffer));
             } catch (error) {
@@ -42,53 +51,61 @@ function request(payload) {
 }
 
 async function main() {
+    const action = process.argv[2];
+
+    if (!action) {
+        console.error(
+            "Usage: ./psm-headless.js players <psm-world-id>"
+        );
+
+        process.exitCode = 1;
+        return;
+    }
+
+    if (action !== "players") {
+        console.error(
+            `Unknown action: ${action}`
+        );
+
+        process.exitCode = 1;
+        return;
+    }
+
+    const worldId = process.argv[3];
+
+    if (!worldId) {
+        console.error(
+            "Missing PSM world ID"
+        );
+
+        console.error(
+            "Usage: ./psm-headless.js players <psm-world-id>"
+        );
+
+        process.exitCode = 1;
+        return;
+    }
+
     try {
-        // Get the configured worlds.
-        const worldsResponse = await request({
-            action: "worlds",
-        });
-
-        if (!worldsResponse.ok) {
-            throw new Error(
-                worldsResponse.error ||
-                "Failed to get worlds"
-            );
-        }
-
-        const worlds =
-            worldsResponse.result?.worlds || [];
-
-        if (worlds.length === 0) {
-            console.log("No worlds configured.");
-            return;
-        }
-
-        // For this first version, use the first world.
-        const world = worlds[0];
-
-        const playersResponse = await request({
+        const response = await request({
             action: "players",
-            world_id: world.world_id,
+            world_id: worldId,
         });
 
-        if (!playersResponse.ok) {
+        if (!response.ok) {
             throw new Error(
-                playersResponse.error ||
+                response.error ||
                 "Failed to get players"
             );
         }
 
         const result =
-            playersResponse.result || {};
+            response.result || {};
 
         const players =
             Array.isArray(result.players)
                 ? result.players
                 : [];
-
-        console.log(
-            `World: ${world.display_name}`
-        );
 
         console.log(
             `Players Online: ${players.length}`
@@ -102,7 +119,9 @@ async function main() {
         }
 
         for (const player of players) {
-            console.log(player.name || "Unknown");
+            console.log(
+                player.name || "Unknown"
+            );
 
             if (player.accountName) {
                 console.log(
@@ -130,7 +149,9 @@ async function main() {
                 player.ping !== null
             ) {
                 console.log(
-                    `  Ping: ${Number(player.ping).toFixed(2)} ms`
+                    `  Ping: ${Number(
+                        player.ping
+                    ).toFixed(2)} ms`
                 );
             }
 
