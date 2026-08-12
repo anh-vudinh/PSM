@@ -51,10 +51,11 @@ psm-headless.js players unban <player_id> <world_id>
 
 ```
 psm-headless.js worlds list
-psm-headless.js worlds start <world_id>
-psm-headless.js worlds stop <world_id>
-psm-headless.js worlds restart <world_id>
 psm-headless.js worlds status <world_id>
+psm-headless.js worlds start <world_id>   | all
+psm-headless.js worlds stop <world_id>    | all
+psm-headless.js worlds restart <world_id> | all
+psm-headless.js worlds update <world_id>  | all
 ```
 
 > World Specific - ping, broadcast, save, listschedules

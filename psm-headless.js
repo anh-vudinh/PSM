@@ -93,6 +93,10 @@ function usage() {
     console.error(
         "  ./psm-headless.js worlds restart <psm-world-id|all>"
     );
+
+    console.error(
+        "  ./psm-headless.js worlds update <psm-world-id|all>"
+    );
 }
 
 async function players(worldId) {
@@ -469,7 +473,8 @@ async function main() {
                 subcommand === "status" ||
                 subcommand === "start" ||
                 subcommand === "stop" ||
-                subcommand === "restart"
+                subcommand === "restart" ||
+                subcommand === "update"
             ) {
                 const worldId =
                     process.argv[4];
@@ -484,7 +489,8 @@ async function main() {
                     if (
                         subcommand === "start" ||
                         subcommand === "stop" ||
-                        subcommand === "restart"
+                        subcommand === "restart" ||
+                        subcommand === "update"
                     ) {
                         console.error(
                             `Usage: ./psm-headless.js worlds ${subcommand} <psm-world-id|all>`
