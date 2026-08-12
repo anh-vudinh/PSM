@@ -10,6 +10,7 @@ let windowsGpuStaticInfo = null;
 let previousCpu = null;
 let running = true;
 let started = false;
+let previousRenderLines = 0;
 
 const PLATFORM = process.platform;
 
@@ -1377,11 +1378,37 @@ function render() {
         );
     }
 
-    process.stdout.write("\x1b[2J\x1b[H");
+    if (previousRenderLines > 0) {
+        process.stdout.write(
+            `\x1b[${previousRenderLines}A`
+        );
+    }
 
     for (const line of lines) {
-        process.stdout.write(line + "\n");
+        process.stdout.write(
+            `\x1b[2K${line}\n`
+        );
     }
+
+    /*
+    * If this render produced fewer lines than the previous
+    * render, clear the leftover lines.
+    */
+    if (lines.length < previousRenderLines) {
+        for (
+            let i = lines.length;
+            i < previousRenderLines;
+            i++
+        ) {
+            process.stdout.write("\x1b[2K\n");
+        }
+
+        process.stdout.write(
+            `\x1b[${previousRenderLines - lines.length}A`
+        );
+    }
+
+    previousRenderLines = lines.length;
 
     started = true;
 }
