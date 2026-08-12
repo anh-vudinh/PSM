@@ -6,6 +6,7 @@ const { execFileSync } = require("child_process");
 
 const REFRESH_MS = 1000;
 
+let windowsGpuStaticInfo = null;
 let previousCpu = null;
 let running = true;
 let started = false;
@@ -373,10 +374,10 @@ function cleanGpuName(name) {
 
 function getWindowsGpuInfo() {
     const output = runPowerShell(`
-Get-CimInstance Win32_VideoController |
-Select-Object Name,PNPDeviceID |
-ConvertTo-Json -Compress
-`);
+    Get-CimInstance Win32_VideoController |
+    Select-Object Name,PNPDeviceID |
+    ConvertTo-Json -Compress
+    `);
 
     try {
         const parsed = JSON.parse(output);
@@ -537,24 +538,24 @@ function getWindowsDedicatedVramCapacity() {
      */
 
     const counterOutput = runPowerShell(`
-$counter = Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Limit' -ErrorAction SilentlyContinue
+    $counter = Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Limit' -ErrorAction SilentlyContinue
 
-if ($counter) {
-    $values = @(
-        $counter.CounterSamples |
-        Where-Object {
-            $_.InstanceName -match '_phys_0$'
-        } |
-        ForEach-Object {
-            [double]$_.CookedValue
+    if ($counter) {
+        $values = @(
+            $counter.CounterSamples |
+            Where-Object {
+                $_.InstanceName -match '_phys_0$'
+            } |
+            ForEach-Object {
+                [double]$_.CookedValue
+            }
+        )
+
+        if ($values.Count -gt 0) {
+            ($values | Measure-Object -Maximum).Maximum
         }
-    )
-
-    if ($values.Count -gt 0) {
-        ($values | Measure-Object -Maximum).Maximum
     }
-}
-`);
+    `);
 
     const counterValue =
         parseNumber(counterOutput);
@@ -866,19 +867,86 @@ if ($values) {
 /* Windows adapter memory                                                     */
 /* -------------------------------------------------------------------------- */
 
+function getWindowsGpuStaticInfo() {
+    if (windowsGpuStaticInfo !== null) {
+        return windowsGpuStaticInfo;
+    }
+
+    const output = runPowerShell(`
+        $dxdiagFile = Join-Path $env:TEMP 'psm-dxdiag.txt'
+
+        $name = "Unknown GPU"
+        $dedicatedTotal = 0
+
+        try {
+            Start-Process -FilePath "$env:WINDIR\\System32\\dxdiag.exe" -ArgumentList '/dontskip', '/t', $dxdiagFile -Wait -WindowStyle Hidden
+            Start-Sleep -Milliseconds 500
+
+            if (Test-Path $dxdiagFile) {
+                $dxdiag = Get-Content $dxdiagFile -Raw
+
+                $nameMatch = [regex]::Match(
+                    $dxdiag,
+                    'Card name:\\s*(.+)',
+                    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+                )
+
+                if ($nameMatch.Success) {
+                    $name = $nameMatch.Groups[1].Value.Trim()
+                }
+
+                $memoryMatch = [regex]::Match(
+                    $dxdiag,
+                    'Dedicated Memory:\\s*([\\d,]+)\\s*MB',
+                    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+                )
+
+                if ($memoryMatch.Success) {
+                    $dedicatedTotal =
+                        [double]($memoryMatch.Groups[1].Value -replace ',', '') * 1MB
+                }
+
+                Remove-Item $dxdiagFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+            $dedicatedTotal = 0
+        }
+
+        [PSCustomObject]@{
+            DedicatedTotal = $dedicatedTotal
+        } | ConvertTo-Json -Compress
+    `);
+
+    try {
+        const data = JSON.parse(output);
+
+        windowsGpuStaticInfo = {
+            dedicatedTotal:
+                Number(data.DedicatedTotal) || 0,
+        };
+    } catch {
+        windowsGpuStaticInfo = {
+            dedicatedTotal: 0,
+        };
+    }
+
+    return windowsGpuStaticInfo;
+}
+
 function getWindowsAdapterMemory() {
     /*
-     * Dedicated Usage and Shared Usage are totals for the GPU adapter,
-     * not per-process totals.
+     * GPU Adapter Memory gives us the CURRENT usage:
      *
-     * This is exactly what we want for:
+     * Dedicated Usage = VRAM currently being used
+     * Shared Usage    = system RAM currently being used by the GPU
      *
-     * Dedicated GPU:
-     *   VRAM = Dedicated Usage
-     *   SHRD = Shared Usage
+     * DXDiag gives us the ACTUAL hardware capacity:
      *
-     * Integrated GPU:
-     *   RAM/shared memory = Shared Usage
+     * Dedicated Memory = total physical VRAM
+     *
+     * We keep the existing working usage detection and only
+     * add DXDiag for the missing dedicated VRAM capacity.
      */
 
     const output = runPowerShell(`
@@ -911,10 +979,29 @@ function getWindowsAdapterMemory() {
             Dedicated = [double]$dedicatedValue
             Shared = [double]$sharedValue
         } | ConvertTo-Json -Compress
-        `);
+    `);
 
     try {
         const data = JSON.parse(output);
+
+        try {
+    const data = JSON.parse(output);
+
+    console.log("WINDOWS GPU MEMORY DEBUG:", data);
+
+    return {
+        dedicated:
+            Number(data.Dedicated) || 0,
+
+        shared:
+            Number(data.Shared) || 0,
+    };
+} catch {
+    return {
+        dedicated: 0,
+        shared: 0,
+    };
+}
 
         return {
             dedicated:
@@ -922,11 +1009,15 @@ function getWindowsAdapterMemory() {
 
             shared:
                 Number(data.Shared) || 0,
+
+            dedicatedTotal:
+                Number(data.DedicatedTotal) || 0,
         };
     } catch {
         return {
             dedicated: 0,
             shared: 0,
+            dedicatedTotal: 0,
         };
     }
 }
@@ -1099,7 +1190,7 @@ function getGpu() {
                     memory.dedicated,
 
                 memoryTotal:
-                    getWindowsDedicatedVramCapacity(),
+                    getWindowsGpuStaticInfo().dedicatedTotal,
 
                 shared:
                     memory.shared,
@@ -1205,18 +1296,10 @@ function render() {
         );
     }
 
-    if (started) {
-        process.stdout.write(
-            `\x1b[${lines.length}A`
-        );
-    }
+    process.stdout.write("\x1b[2J\x1b[H");
 
     for (const line of lines) {
-        process.stdout.write(
-            "\x1b[2K\r" +
-            line +
-            "\n"
-        );
+        process.stdout.write(line + "\n");
     }
 
     started = true;
