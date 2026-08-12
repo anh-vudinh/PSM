@@ -517,33 +517,47 @@ function getGpuInfo() {
 
 function getWindowsDedicatedVramCapacity() {
     /*
-     * Win32_VideoController.AdapterRAM is a 32-bit value.
-     * It therefore cannot correctly represent GPUs with more than
-     * 4 GB of VRAM.
+     * We deliberately do NOT use:
      *
-     * Windows exposes the actual adapter memory through the
-     * GPU Adapter Memory performance counters. Prefer the
-     * Dedicated Limit counter because that represents the actual
-     * dedicated memory capacity of the adapter.
+     * Win32_VideoController.AdapterRAM
+     *
+     * That property is effectively limited to 32 bits and can report
+     * approximately 4 GB on a GPU that actually has 16 GB or more.
+     *
+     * We first try the Windows GPU Adapter Memory performance counter.
+     * If the driver doesn't expose Dedicated Limit, we read the
+     * display driver's HardwareInformation.MemorySize registry value.
+     */
+
+    /*
+     * ----------------------------------------------------------------------
+     * Method 1:
+     * GPU Adapter Memory -> Dedicated Limit
+     * ----------------------------------------------------------------------
      */
 
     const counterOutput = runPowerShell(`
 $counter = Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Limit' -ErrorAction SilentlyContinue
 
 if ($counter) {
-    $values = $counter.CounterSamples |
+    $values = @(
+        $counter.CounterSamples |
         Where-Object {
             $_.InstanceName -match '_phys_0$'
         } |
-        Select-Object -ExpandProperty CookedValue
+        ForEach-Object {
+            [double]$_.CookedValue
+        }
+    )
 
-    if ($values) {
+    if ($values.Count -gt 0) {
         ($values | Measure-Object -Maximum).Maximum
     }
 }
 `);
 
-    const counterValue = parseNumber(counterOutput);
+    const counterValue =
+        parseNumber(counterOutput);
 
     if (
         counterValue !== null &&
@@ -553,32 +567,106 @@ if ($counter) {
     }
 
     /*
-     * Fallback to the driver's 64-bit registry value.
+     * ----------------------------------------------------------------------
+     * Method 2:
+     * Read HardwareInformation.MemorySize directly from the display
+     * driver registry keys.
      *
-     * HardwareInformation.MemorySize is used by many Windows
-     * display drivers and avoids the 32-bit AdapterRAM limitation.
+     * Some drivers expose this as:
+     *
+     *   REG_QWORD
+     *
+     * while others expose it as:
+     *
+     *   REG_BINARY
+     *
+     * We handle both.
+     * ----------------------------------------------------------------------
      */
 
     const registryOutput = runPowerShell(`
-$path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'
+$base = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'
 
-$values = @(
-    Get-ChildItem $path -ErrorAction SilentlyContinue |
-    ForEach-Object {
-        $item = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+$results = @()
 
-        if ($item.HardwareInformation_MemorySize) {
-            [PSCustomObject]@{
-                Description = [string]$item.DriverDesc
-                MemorySize = [uint64]$item.HardwareInformation_MemorySize
+for ($i = 0; $i -le 99; $i++) {
+    $subKey = '{0:D4}' -f $i
+    $path = Join-Path $base $subKey
+
+    try {
+        $key = Get-Item $path -ErrorAction Stop
+
+        $description = $key.GetValue(
+            'DriverDesc',
+            $null,
+            [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+        )
+
+        if (-not $description) {
+            continue
+        }
+
+        $raw = $key.GetValue(
+            'HardwareInformation.MemorySize',
+            $null,
+            [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+        )
+
+        if ($null -eq $raw) {
+            continue
+        }
+
+        $size = $null
+
+        if ($raw -is [byte[]]) {
+            if ($raw.Length -ge 8) {
+                $size = [BitConverter]::ToUInt64($raw, 0)
+            }
+            elseif ($raw.Length -ge 4) {
+                $size = [BitConverter]::ToUInt32($raw, 0)
+            }
+        }
+        elseif ($raw -is [uint64]) {
+            $size = [uint64]$raw
+        }
+        elseif ($raw -is [int64]) {
+            $size = [uint64]$raw
+        }
+        elseif ($raw -is [uint32]) {
+            $size = [uint64]$raw
+        }
+        elseif ($raw -is [int32]) {
+            $size = [uint64]$raw
+        }
+        elseif ($raw -is [string]) {
+            $parsed = 0L
+
+            if ([Int64]::TryParse(
+                $raw,
+                [ref]$parsed
+            )) {
+                $size = [uint64]$parsed
+            }
+        }
+
+        if (
+            $null -ne $size -and
+            $size -gt 0
+        ) {
+            $results += [PSCustomObject]@{
+                Description = [string]$description
+                MemorySize = [uint64]$size
             }
         }
     }
-)
+    catch {
+        continue
+    }
+}
 
-$match = $values |
+$match = $results |
     Where-Object {
-        $_.Description -match 'AMD|Radeon|NVIDIA|GeForce|RTX|GTX|Quadro|Intel'
+        $_.Description -match 'Radeon|AMD|GeForce|NVIDIA|RTX|GTX|Quadro'
     } |
     Select-Object -First 1
 
@@ -595,6 +683,128 @@ if ($match) {
         registryValue > 0
     ) {
         return registryValue;
+    }
+
+    /*
+     * ----------------------------------------------------------------------
+     * Method 3:
+     * reg.exe fallback.
+     *
+     * This is useful on systems where PowerShell's registry provider has
+     * trouble exposing the driver's binary value.
+     * ----------------------------------------------------------------------
+     */
+
+    try {
+        const output = execFileSync(
+            "reg.exe",
+            [
+                "query",
+                "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}",
+                "/s",
+                "/v",
+                "HardwareInformation.MemorySize",
+            ],
+            {
+                encoding: "utf8",
+                windowsHide: true,
+                stdio: [
+                    "ignore",
+                    "pipe",
+                    "ignore",
+                ],
+                maxBuffer: 4 * 1024 * 1024,
+            }
+        );
+
+        /*
+         * reg.exe output can contain either:
+         *
+         * REG_QWORD    0x400000000
+         *
+         * or
+         *
+         * REG_BINARY   00 00 ...
+         *
+         * We parse QWORD directly first.
+         */
+
+        const qwordMatch = output.match(
+            /HardwareInformation\.MemorySize\s+REG_QWORD\s+0x([0-9a-f]+)/i
+        );
+
+        if (qwordMatch) {
+            const value = parseInt(
+                qwordMatch[1],
+                16
+            );
+
+            if (
+                Number.isFinite(value) &&
+                value > 0
+            ) {
+                return value;
+            }
+        }
+
+        /*
+         * Handle REG_BINARY.
+         *
+         * Windows stores the little-endian integer as bytes.
+         */
+
+        const binaryMatch = output.match(
+            /HardwareInformation\.MemorySize\s+REG_BINARY\s+((?:[0-9a-f]{2}\s*)+)/i
+        );
+
+        if (binaryMatch) {
+            const bytes = binaryMatch[1]
+                .trim()
+                .split(/\s+/)
+                .map((value) =>
+                    parseInt(value, 16)
+                );
+
+            if (bytes.length >= 4) {
+                let value = 0;
+
+                /*
+                 * Read up to 8 bytes, little endian.
+                 *
+                 * JavaScript Number is safe for the memory sizes
+                 * we're dealing with here.
+                 */
+
+                const count = Math.min(
+                    bytes.length,
+                    8
+                );
+
+                for (
+                    let i = 0;
+                    i < count;
+                    i++
+                ) {
+                    value +=
+                        bytes[i] *
+                        Math.pow(
+                            256,
+                            i
+                        );
+                }
+
+                if (
+                    Number.isFinite(value) &&
+                    value > 0
+                ) {
+                    return value;
+                }
+            }
+        }
+    } catch {
+        /*
+         * Nothing else to try.
+         */
     }
 
     return null;
@@ -672,36 +882,36 @@ function getWindowsAdapterMemory() {
      */
 
     const output = runPowerShell(`
-$dedicated = Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Usage' -ErrorAction SilentlyContinue |
-    Select-Object -ExpandProperty CounterSamples
+        $dedicated = Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Usage' -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty CounterSamples
 
-$shared = Get-Counter '\\GPU Adapter Memory(*)\\Shared Usage' -ErrorAction SilentlyContinue |
-    Select-Object -ExpandProperty CounterSamples
+        $shared = Get-Counter '\\GPU Adapter Memory(*)\\Shared Usage' -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty CounterSamples
 
-$dedicatedValue = 0
-$sharedValue = 0
+        $dedicatedValue = 0
+        $sharedValue = 0
 
-if ($dedicated) {
-    $dedicatedValue = ($dedicated |
-        Where-Object {
-            $_.InstanceName -match '_phys_0$'
-        } |
-        Measure-Object -Property CookedValue -Sum).Sum
-}
+        if ($dedicated) {
+            $dedicatedValue = ($dedicated |
+                Where-Object {
+                    $_.InstanceName -match '_phys_0$'
+                } |
+                Measure-Object -Property CookedValue -Sum).Sum
+        }
 
-if ($shared) {
-    $sharedValue = ($shared |
-        Where-Object {
-            $_.InstanceName -match '_phys_0$'
-        } |
-        Measure-Object -Property CookedValue -Sum).Sum
-}
+        if ($shared) {
+            $sharedValue = ($shared |
+                Where-Object {
+                    $_.InstanceName -match '_phys_0$'
+                } |
+                Measure-Object -Property CookedValue -Sum).Sum
+        }
 
-[PSCustomObject]@{
-    Dedicated = [double]$dedicatedValue
-    Shared = [double]$sharedValue
-} | ConvertTo-Json -Compress
-`);
+        [PSCustomObject]@{
+            Dedicated = [double]$dedicatedValue
+            Shared = [double]$sharedValue
+        } | ConvertTo-Json -Compress
+        `);
 
     try {
         const data = JSON.parse(output);
