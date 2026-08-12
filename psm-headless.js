@@ -366,6 +366,48 @@ async function worldsAction(action, worldId) {
     const result =
         response.result || {};
 
+    if (
+        result.all &&
+        Array.isArray(
+            result.results
+        )
+    ) {
+        const verb = {
+            start: "Started",
+            stop: "Stopped",
+            restart: "Restarted",
+        }[action] || action;
+
+        console.log(
+            `${verb} ${result.results.length} world(s)`
+        );
+
+        console.log("");
+
+        for (const world of result.results) {
+            console.log(
+                `[${world.ok ? "OK" : "FAIL"}] ${world.display_name}`
+            );
+
+            console.log(
+                `  World ID: ${world.world_id}`
+            );
+
+            if (
+                !world.ok &&
+                world.error
+            ) {
+                console.log(
+                    `  Error: ${world.error}`
+                );
+            }
+
+            console.log("");
+        }
+
+        return;
+    }
+
     console.log(
         JSON.stringify(
             result,
