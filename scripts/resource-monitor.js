@@ -1172,46 +1172,34 @@ function getLinuxIntelGpu() {
         let shared = null;
 
         try {
-            const gemOutput = fs.readFileSync(
-                "/sys/kernel/debug/dri/0000:00:02.0/i915_gem_objects",
-                "utf8"
+            const gemOutput = execFileSync(
+                "sudo",
+                [
+                    "cat",
+                    "/sys/kernel/debug/dri/0000:00:02.0/i915_gem_objects",
+                ],
+                {
+                    encoding: "utf8",
+                    timeout: 2500,
+                    maxBuffer: 1024 * 1024,
+                    stdio: [
+                        "ignore",
+                        "pipe",
+                        "ignore",
+                    ],
+                }
             );
 
-        console.error(
-            "GEM DEBUG:",
-            JSON.stringify(gemOutput)
-        );    
+            const match = gemOutput.match(
+                /^\s*\d+\s+shrinkable\s+\[\d+\s+free\]\s+objects,\s+(\d+)\s+bytes/m
+            );
 
-        const match = gemOutput.match(
-            /^\s*\d+\s+shrinkable\s+\[\d+\s+free\]\s+objects,\s+(\d+)\s+bytes/m
-        );
-
-        if (match) {
+            if (match) {
                 shared = Number(match[1]);
             }
-
-            console.error(
-                "GEM DEBUG:",
-                JSON.stringify({
-                    gemOutput,
-                    match: match?.[1] || null,
-                    shared,
-                })
-            );
         } catch {
             shared = null;
         }
-
-        console.error(
-            "LINUX GPU DEBUG:",
-            JSON.stringify({
-                render,
-                video,
-                blitter,
-                enhance,
-                utilization,
-            })
-        );
 
         return {
             utilization,
