@@ -380,6 +380,7 @@ async function worldsAction(action, worldId) {
             start: "Started",
             stop: "Stopped",
             restart: "Restarted",
+            update: "Updated",
         }[action] || action;
 
         console.log(
@@ -389,13 +390,32 @@ async function worldsAction(action, worldId) {
         console.log("");
 
         for (const world of result.results) {
+            const displayName =
+                world.display_name ||
+                world.worldName ||
+                "Unknown World";
+
+            const worldId =
+                world.world_id ||
+                world.worldId ||
+                "Unknown";
+
             console.log(
-                `[${world.ok ? "OK" : "FAIL"}] ${world.display_name}`
+                `[${world.ok ? "OK" : "FAIL"}] ${displayName}`
             );
 
             console.log(
-                `  World ID: ${world.world_id}`
+                `  World ID: ${worldId}`
             );
+
+            if (
+                action === "update" &&
+                world.build
+            ) {
+                console.log(
+                    `  Build: ${world.build}`
+                );
+            }
 
             if (
                 !world.ok &&
