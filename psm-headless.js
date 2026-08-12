@@ -83,15 +83,15 @@ function usage() {
     );
 
     console.error(
-        "  ./psm-headless.js worlds start <psm-world-id>"
+        "  ./psm-headless.js worlds start <psm-world-id|all>"
     );
 
     console.error(
-        "  ./psm-headless.js worlds stop <psm-world-id>"
+        "  ./psm-headless.js worlds stop <psm-world-id|all>"
     );
 
     console.error(
-        "  ./psm-headless.js worlds restart <psm-world-id>"
+        "  ./psm-headless.js worlds restart <psm-world-id|all>"
     );
 }
 
@@ -439,9 +439,19 @@ async function main() {
 
                     console.error("");
 
-                    console.error(
-                        `Usage: ./psm-headless.js worlds ${subcommand} <psm-world-id>`
-                    );
+                    if (
+                        subcommand === "start" ||
+                        subcommand === "stop" ||
+                        subcommand === "restart"
+                    ) {
+                        console.error(
+                            `Usage: ./psm-headless.js worlds ${subcommand} <psm-world-id|all>`
+                        );
+                    } else {
+                        console.error(
+                            `Usage: ./psm-headless.js worlds ${subcommand} <psm-world-id>`
+                        );
+                    }
 
                     process.exitCode = 1;
                     return;
