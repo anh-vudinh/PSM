@@ -106,6 +106,10 @@ function usage() {
     "  ./psm-headless.js schedules list <psm-world-id>"
     );
     
+    console.error(
+    "  ./psm-headless.js broadcast <psm-world-id> \"<message>\""
+    );
+    
 }
 
 async function players(worldId) {
@@ -706,6 +710,38 @@ async function playersAction(action, playerId, worldId) {
     );
 }
 
+async function broadcastAction(worldId, message) {
+    const response = await request({
+        action: "broadcast",
+        world_id: worldId,
+        message,
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            response.error ||
+            "Failed to send broadcast"
+        );
+    }
+
+    const result =
+        response.result || {};
+
+    console.log(
+        "Broadcast sent successfully."
+    );
+
+    console.log(
+        `  World ID: ${worldId}`
+    );
+
+    if (result.via) {
+        console.log(
+            `  Via: ${result.via}`
+        );
+    }
+}
+
 async function main() {
     const action = process.argv[2];
 
@@ -716,6 +752,51 @@ async function main() {
     }
 
     try {
+        if (action === "broadcast") {
+            const worldId =
+                process.argv[3];
+
+            const message =
+                process.argv[4];
+
+            if (!worldId) {
+                console.error(
+                    "Missing PSM world ID"
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js broadcast <psm-world-id> \"<message>\""
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            if (!message) {
+                console.error(
+                    "Missing broadcast message"
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js broadcast <psm-world-id> \"<message>\""
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            await broadcastAction(
+                worldId,
+                message
+            );
+
+            return;
+        }
+
         if (action === "players") {
             const subcommand =
                 process.argv[3];
