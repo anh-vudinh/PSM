@@ -101,6 +101,10 @@ function usage() {
     console.error(
         "  ./psm-headless.js backup <psm-world-id|all>"
     );
+
+    console.error(
+    "  ./psm-headless.js schedules list <psm-world-id>"
+    );
     
 }
 
@@ -638,6 +642,55 @@ async function backupAction(worldId) {
     }
 }
 
+async function schedulesList(worldId) {
+    const response = await request({
+        action: "schedules",
+        world_id: worldId,
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            response.error ||
+            "Failed to list schedules"
+        );
+    }
+
+    const result =
+        response.result || {};
+
+    const schedules =
+        Array.isArray(result.schedules)
+            ? result.schedules
+            : [];
+
+    console.log(
+        `Schedules: ${schedules.length}`
+    );
+
+    console.log("");
+
+    if (schedules.length === 0) {
+        console.log("No schedules found.");
+        return;
+    }
+
+    for (const schedule of schedules) {
+        console.log(
+            `Schedule ID: ${schedule.id ?? "Unknown"}`
+        );
+
+        console.log(
+            JSON.stringify(
+                schedule,
+                null,
+                2
+            )
+        );
+
+        console.log("");
+    }
+}
+
 async function playersAction(action, playerId, worldId) {
     const response = await request({
         action,
@@ -914,6 +967,51 @@ async function main() {
             }
 
             await backupAction(worldId);
+            return;
+        }
+
+        if (action === "schedules") {
+            const subcommand =
+                process.argv[3];
+
+            if (subcommand !== "list") {
+                console.error(
+                    `Unknown schedules action: ${subcommand || ""}`
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage:"
+                );
+
+                console.error(
+                    "  ./psm-headless.js schedules list <psm-world-id>"
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            const worldId =
+                process.argv[4];
+
+            if (!worldId) {
+                console.error(
+                    "Missing PSM world ID"
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js schedules list <psm-world-id>"
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            await schedulesList(worldId);
             return;
         }
 
