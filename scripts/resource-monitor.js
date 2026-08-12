@@ -222,13 +222,21 @@ function readMemoryLinux() {
 }
 
 function readMemoryWindows() {
+    /*
+     * RAM usage remains live.
+     *
+     * Total system RAM is hardware information, so cache it in
+     * windowsGpuStaticInfo after the first successful read.
+     */
+
     const output = runPowerShell(`
-$os = Get-CimInstance Win32_OperatingSystem
-[PSCustomObject]@{
-    Total = [int64]$os.TotalVisibleMemorySize * 1024
-    Free = [int64]$os.FreePhysicalMemory * 1024
-} | ConvertTo-Json -Compress
-`);
+        $os = Get-CimInstance Win32_OperatingSystem
+
+        [PSCustomObject]@{
+            Total = [int64]$os.TotalVisibleMemorySize * 1024
+            Free = [int64]$os.FreePhysicalMemory * 1024
+        } | ConvertTo-Json -Compress
+    `);
 
     try {
         const data = JSON.parse(output);
@@ -236,17 +244,41 @@ $os = Get-CimInstance Win32_OperatingSystem
         const total = Number(data.Total);
         const free = Number(data.Free);
 
+        /*
+         * Initialize the static Windows information object if the
+         * GPU information has not populated it yet.
+         */
+        if (!windowsGpuStaticInfo) {
+            getWindowsGpuStaticInfo();
+        }
+        /*
+         * Cache total RAM only once.
+         */
+        if (
+            !windowsGpuStaticInfo.systemMemoryTotal &&
+            Number.isFinite(total) &&
+            total > 0
+        ) {
+            windowsGpuStaticInfo.systemMemoryTotal = total;
+        }
+
         return {
             used: Math.max(
                 0,
                 total - free
             ),
-            total,
+
+            total:
+                windowsGpuStaticInfo.systemMemoryTotal ||
+                total,
         };
     } catch {
         return {
             used: 0,
-            total: 0,
+
+            total:
+                windowsGpuStaticInfo?.systemMemoryTotal ||
+                0,
         };
     }
 }
@@ -497,7 +529,22 @@ function getGpuInfo() {
     }
 
     if (PLATFORM === "win32") {
-        gpuInfo = getWindowsGpuInfo();
+        const staticInfo = getWindowsGpuStaticInfo();
+
+        const detected = getWindowsGpuInfo();
+
+        gpuInfo = {
+            name:
+                staticInfo.name ||
+                detected?.name ||
+                "Unknown GPU",
+
+            dedicated:
+                detected?.dedicated || false,
+
+            pnpDeviceId:
+                detected?.pnpDeviceId || "",
+        };
     } else {
         gpuInfo = getLinuxGpuInfo();
     }
@@ -832,21 +879,21 @@ function getWindowsGpuUtilization() {
      */
 
     const output = runPowerShell(`
-$values = Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue |
-    Select-Object -ExpandProperty CounterSamples |
-    Where-Object {
-        $_.InstanceName -match '_phys_0_'
-    } |
-    ForEach-Object {
-        [double]$_.CookedValue
-    }
+    $values = Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty CounterSamples |
+        Where-Object {
+            $_.InstanceName -match '_phys_0_'
+        } |
+        ForEach-Object {
+            [double]$_.CookedValue
+        }
 
-if ($values) {
-    ($values | Measure-Object -Maximum).Maximum
-} else {
-    0
-}
-`);
+    if ($values) {
+        ($values | Measure-Object -Maximum).Maximum
+    } else {
+        0
+    }
+    `);
 
     const value = parseNumber(output);
 
@@ -924,10 +971,14 @@ function getWindowsGpuStaticInfo() {
         windowsGpuStaticInfo = {
             dedicatedTotal:
                 Number(data.DedicatedTotal) || 0,
+
+            name:
+                getWindowsGpuInfo()?.name || "Unknown GPU",
         };
     } catch {
         windowsGpuStaticInfo = {
             dedicatedTotal: 0,
+            name: "Unknown GPU",
         };
     }
 
@@ -986,8 +1037,6 @@ function getWindowsAdapterMemory() {
 
         try {
     const data = JSON.parse(output);
-
-    console.log("WINDOWS GPU MEMORY DEBUG:", data);
 
     return {
         dedicated:
