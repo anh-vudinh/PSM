@@ -91,7 +91,7 @@ function usage() {
     );
 
     console.error(
-    "  ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> \"<message>\""
+    "  ./psm-headless.js worlds graceful-stop <psm-world-id|all> <wait_time_seconds> \"<message>\""
     );
 
     console.error(
