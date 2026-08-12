@@ -725,26 +725,14 @@ function getWindowsAdapterMemory() {
     try {
         const data = JSON.parse(output);
 
-        try {
-        const data = JSON.parse(output);
         return {
-            dedicated:
-                Number(data.Dedicated) || 0,
-
-            shared:
-                Number(data.Shared) || 0,
+            dedicated: Number(data.Dedicated) || 0,
+            shared: Number(data.Shared) || 0,
         };
-        } catch {
-            return {
-                dedicated: 0,
-                shared: 0,
-            };
-        }
     } catch {
         return {
             dedicated: 0,
             shared: 0,
-            dedicatedTotal: 0,
         };
     }
 }
