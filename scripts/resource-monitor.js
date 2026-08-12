@@ -1,7 +1,7 @@
 "use strict";
 
 const fs = require("fs");
-const { spawn } = require("child_process");
+const { execFile } = require("child_process");
 
 const REFRESH_MS = 1000;
 
@@ -9,8 +9,8 @@ let previousCpu = null;
 let running = true;
 let started = false;
 
-let gpuProcess = null;
 let gpuUtilization = null;
+let gpuReading = false;
 
 function readCpu() {
     const stat = fs.readFileSync(
@@ -170,216 +170,102 @@ function formatBytes(bytes) {
     )} ${units[index]}`;
 }
 
-function startGpuMonitor() {
-    try {
-        gpuProcess = spawn(
-            "intel_gpu_top",
-            [
-                "-J",
-                "-s",
-                String(REFRESH_MS),
-            ],
-            {
-                stdio: [
-                    "ignore",
-                    "pipe",
-                    "ignore",
-                ],
+function readGpu() {
+    if (!running || gpuReading) {
+        return;
+    }
+
+    gpuReading = true;
+
+    execFile(
+        "intel_gpu_top",
+        [
+            "-J",
+            "-s",
+            String(REFRESH_MS),
+            "-n",
+            "2",
+        ],
+        {
+            maxBuffer:
+                1024 * 1024 * 10,
+        },
+        (error, stdout) => {
+            gpuReading = false;
+
+            if (error || !stdout) {
+                gpuUtilization = null;
+                return;
             }
-        );
 
-        let buffer = "";
+            try {
+                const samples =
+                    JSON.parse(stdout);
 
-        gpuProcess.stdout.setEncoding(
-            "utf8"
-        );
+                if (
+                    !Array.isArray(
+                        samples
+                    ) ||
+                    samples.length === 0
+                ) {
+                    gpuUtilization = null;
+                    return;
+                }
 
-        gpuProcess.stdout.on(
-            "data",
-            (chunk) => {
-                buffer += chunk;
+                const sample =
+                    samples[
+                        samples.length - 1
+                    ];
+
+                const engines =
+                    sample?.engines;
+
+                if (!engines) {
+                    gpuUtilization = null;
+                    return;
+                }
+
+                const values =
+                    Object.values(engines)
+                        .map((engine) =>
+                            Number(
+                                engine?.busy
+                            )
+                        )
+                        .filter(
+                            Number.isFinite
+                        );
+
+                if (!values.length) {
+                    gpuUtilization = null;
+                    return;
+                }
 
                 /*
-                 * intel_gpu_top -J outputs a
-                 * continuous JSON array. Each
-                 * object is one measurement.
+                 * Use the busiest engine as
+                 * overall GPU utilization.
                  *
-                 * Find complete objects by
-                 * looking for the end of the
-                 * engines section.
+                 * Example:
+                 * Render/3D = 4.5%
+                 * Video    = 13.6%
+                 *
+                 * Display = 13.6%
                  */
-                while (true) {
-                    const start =
-                        buffer.indexOf("{");
+                gpuUtilization =
+                    Math.max(...values);
 
-                    if (start === -1) {
-                        buffer = "";
-                        break;
-                    }
-
-                    const end =
-                        findJsonObjectEnd(
-                            buffer,
-                            start
-                        );
-
-                    if (end === -1) {
-                        if (start > 0) {
-                            buffer =
-                                buffer.slice(
-                                    start
-                                );
-                        }
-
-                        break;
-                    }
-
-                    const json =
-                        buffer.slice(
-                            start,
-                            end + 1
-                        );
-
-                    buffer =
-                        buffer.slice(
-                            end + 1
-                        );
-
-                    try {
-                        const sample =
-                            JSON.parse(json);
-
-                        updateGpuUsage(
-                            sample
-                        );
-                    } catch {
-                        // Ignore incomplete/
-                        // malformed samples.
-                    }
-                }
-            }
-        );
-
-        gpuProcess.on(
-            "error",
-            () => {
-                gpuUtilization = null;
-            }
-        );
-
-        gpuProcess.on(
-            "exit",
-            () => {
-                gpuProcess = null;
-                gpuUtilization = null;
-
-                if (running) {
-                    setTimeout(
-                        startGpuMonitor,
-                        1000
+                gpuUtilization =
+                    Math.max(
+                        0,
+                        Math.min(
+                            100,
+                            gpuUtilization
+                        )
                     );
-                }
-            }
-        );
-    } catch {
-        gpuProcess = null;
-        gpuUtilization = null;
-    }
-}
-
-function findJsonObjectEnd(
-    text,
-    start
-) {
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-
-    for (
-        let i = start;
-        i < text.length;
-        i++
-    ) {
-        const char = text[i];
-
-        if (inString) {
-            if (escaped) {
-                escaped = false;
-                continue;
-            }
-
-            if (char === "\\") {
-                escaped = true;
-                continue;
-            }
-
-            if (char === '"') {
-                inString = false;
-            }
-
-            continue;
-        }
-
-        if (char === '"') {
-            inString = true;
-            continue;
-        }
-
-        if (char === "{") {
-            depth++;
-        } else if (char === "}") {
-            depth--;
-
-            if (depth === 0) {
-                return i;
+            } catch {
+                gpuUtilization = null;
             }
         }
-    }
-
-    return -1;
-}
-
-function updateGpuUsage(sample) {
-    const engines =
-        sample?.engines;
-
-    if (!engines) {
-        return;
-    }
-
-    const values = Object.values(
-        engines
-    )
-        .map((engine) =>
-            Number(engine?.busy)
-        )
-        .filter(Number.isFinite);
-
-    if (!values.length) {
-        gpuUtilization = null;
-        return;
-    }
-
-    /*
-     * intel_gpu_top reports separate
-     * engine utilization values.
-     *
-     * We use the busiest engine as the
-     * overall GPU utilization rather
-     * than adding them together, since
-     * multiple engines can be active
-     * simultaneously.
-     */
-    gpuUtilization = Math.max(
-        ...values
-    );
-
-    gpuUtilization = Math.max(
-        0,
-        Math.min(
-            100,
-            gpuUtilization
-        )
     );
 }
 
@@ -387,6 +273,11 @@ function getGpu() {
     return {
         utilization:
             gpuUtilization,
+
+        /*
+         * UHD 620 uses shared system
+         * memory rather than dedicated VRAM.
+         */
         memoryUsed: null,
         memoryTotal: null,
     };
@@ -449,11 +340,6 @@ function stop() {
 
     running = false;
 
-    if (gpuProcess) {
-        gpuProcess.kill("SIGTERM");
-        gpuProcess = null;
-    }
-
     process.stdout.write(
         "\x1b[2K\r"
     );
@@ -464,12 +350,14 @@ function stop() {
 process.on("SIGTERM", stop);
 process.on("SIGINT", stop);
 
-startGpuMonitor();
-
+readGpu();
 render();
 
 setInterval(() => {
-    if (running) {
-        render();
+    if (!running) {
+        return;
     }
+
+    render();
+    readGpu();
 }, REFRESH_MS);
