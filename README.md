@@ -66,6 +66,8 @@ psm-headless.js backup <world_id>  | all
 
 ```
 psm-headless.js schedules list <world_id>
+psm-headless.js schedules enable <schedule_id>
+psm-headless.js schedules disable <schedule_id>
 ```
 
 ```

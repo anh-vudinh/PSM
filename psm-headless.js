@@ -691,6 +691,129 @@ async function schedulesList(worldId) {
     }
 }
 
+async function schedulesAction(subcommand, value) {
+    const payload = {
+        action: "schedules",
+        subcommand,
+    };
+
+    if (subcommand === "list") {
+        payload.world_id = value;
+    } else {
+        payload.schedule_id = value;
+    }
+
+    const response =
+        await request(payload);
+
+    if (!response.ok) {
+        throw new Error(
+            response.error ||
+            `Failed to ${subcommand} schedule`
+        );
+    }
+
+    const result =
+        response.result || {};
+
+    if (subcommand === "list") {
+        const schedules =
+            Array.isArray(result.schedules)
+                ? result.schedules
+                : [];
+
+        if (schedules.length === 0) {
+            console.log(
+                "No schedules found."
+            );
+            return;
+        }
+
+        console.log(
+            `Schedules: ${schedules.length}`
+        );
+
+        console.log("");
+
+        for (const schedule of schedules) {
+            console.log(
+                `Schedule ID: ${schedule.id}`
+            );
+
+            console.log(
+                `  Job: ${schedule.job_type}`
+            );
+
+            if (
+                schedule.interval_hours !== null &&
+                schedule.interval_hours !== undefined
+            ) {
+                console.log(
+                    `  Interval: ${schedule.interval_hours} hour(s)`
+                );
+            }
+
+            if (
+                schedule.interval_minutes !== null &&
+                schedule.interval_minutes !== undefined
+            ) {
+                console.log(
+                    `  Interval: ${schedule.interval_minutes} minute(s)`
+                );
+            }
+
+            if (schedule.time_of_day) {
+                console.log(
+                    `  Time: ${schedule.time_of_day}`
+                );
+            }
+
+            console.log(
+                `  Enabled: ${
+                    schedule.enabled
+                        ? "yes"
+                        : "no"
+                }`
+            );
+
+            console.log(
+                `  Last Run: ${
+                    schedule.last_run
+                        ? new Date(
+                            schedule.last_run
+                        ).toLocaleString()
+                        : "Never"
+                }`
+            );
+
+            console.log("");
+        }
+
+        return;
+    }
+
+    const schedule =
+        result.schedule || {};
+
+    console.log(
+        `Schedule ${subcommand}d successfully.`
+    );
+
+    console.log(
+        `  Schedule ID: ${
+            schedule.id || value
+        }`
+    );
+
+    console.log(
+        `  Enabled: ${
+            schedule.enabled
+                ? "yes"
+                : "no"
+        }`
+    );
+}
+
 async function playersAction(action, playerId, worldId) {
     const response = await request({
         action,
@@ -974,9 +1097,9 @@ async function main() {
             const subcommand =
                 process.argv[3];
 
-            if (subcommand !== "list") {
+            if (!subcommand) {
                 console.error(
-                    `Unknown schedules action: ${subcommand || ""}`
+                    "Missing schedules subcommand"
                 );
 
                 console.error("");
@@ -989,29 +1112,80 @@ async function main() {
                     "  ./psm-headless.js schedules list <psm-world-id>"
                 );
 
-                process.exitCode = 1;
-                return;
-            }
-
-            const worldId =
-                process.argv[4];
-
-            if (!worldId) {
                 console.error(
-                    "Missing PSM world ID"
+                    "  ./psm-headless.js schedules enable <schedule-id>"
                 );
 
-                console.error("");
-
                 console.error(
-                    "Usage: ./psm-headless.js schedules list <psm-world-id>"
+                    "  ./psm-headless.js schedules disable <schedule-id>"
                 );
 
                 process.exitCode = 1;
                 return;
             }
 
-            await schedulesList(worldId);
+            if (
+                subcommand === "list" ||
+                subcommand === "enable" ||
+                subcommand === "disable"
+            ) {
+                const value =
+                    process.argv[4];
+
+                if (!value) {
+                    console.error(
+                        `Missing ${
+                            subcommand === "list"
+                                ? "PSM world ID"
+                                : "schedule ID"
+                        }`
+                    );
+
+                    console.error("");
+
+                    console.error(
+                        `Usage: ./psm-headless.js schedules ${subcommand} ${
+                            subcommand === "list"
+                                ? "<psm-world-id>"
+                                : "<schedule-id>"
+                        }`
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                await schedulesAction(
+                    subcommand,
+                    value
+                );
+
+                return;
+            }
+
+            console.error(
+                `Unknown schedules action: ${subcommand}`
+            );
+
+            console.error("");
+
+            console.error(
+                "Usage:"
+            );
+
+            console.error(
+                "  ./psm-headless.js schedules list <psm-world-id>"
+            );
+
+            console.error(
+                "  ./psm-headless.js schedules enable <schedule-id>"
+            );
+
+            console.error(
+                "  ./psm-headless.js schedules disable <schedule-id>"
+            );
+
+            process.exitCode = 1;
             return;
         }
 
