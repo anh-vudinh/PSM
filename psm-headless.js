@@ -97,6 +97,11 @@ function usage() {
     console.error(
         "  ./psm-headless.js worlds update <psm-world-id|all>"
     );
+
+    console.error(
+        "  ./psm-headless.js backup <psm-world-id|all>"
+    );
+    
 }
 
 async function players(worldId) {
@@ -175,6 +180,95 @@ async function players(worldId) {
         }
 
         console.log("");
+    }
+}
+
+async function backup(worldId) {
+    const response = await request({
+        action: "backup",
+        world_id: worldId,
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            response.error ||
+            "Failed to create backup"
+        );
+    }
+
+    const result =
+        response.result || {};
+
+    if (response.all) {
+        console.log(
+            "Backups completed."
+        );
+
+        for (const item of response.results || []) {
+            if (item.ok) {
+                console.log(
+                    `[OK] ${item.display_name}`
+                );
+
+                console.log(
+                    `  World ID: ${item.world_id}`
+                );
+
+                console.log(
+                    `  File: ${item.result?.file || ""}`
+                );
+
+                if (
+                    item.result?.size !== undefined &&
+                    item.result?.size !== null
+                ) {
+                    console.log(
+                        `  Size: ${(item.result.size / 1e6).toFixed(1)} MB`
+                    );
+                }
+            } else {
+                console.log(
+                    `[FAIL] ${item.display_name}`
+                );
+
+                console.log(
+                    `  World ID: ${item.world_id}`
+                );
+
+                console.log(
+                    `  Error: ${item.error}`
+                );
+            }
+
+            console.log("");
+        }
+
+        return;
+    }
+
+    console.log(
+        "Backup created successfully."
+    );
+
+    console.log(
+        `  World: ${response.display_name}`
+    );
+
+    console.log(
+        `  World ID: ${response.world_id}`
+    );
+
+    console.log(
+        `  File: ${result.file || ""}`
+    );
+
+    if (
+        result.size !== undefined &&
+        result.size !== null
+    ) {
+        console.log(
+            `  Size: ${(result.size / 1e6).toFixed(1)} MB`
+        );
     }
 }
 
@@ -438,6 +532,112 @@ async function worldsAction(action, worldId) {
     );
 }
 
+async function backupAction(worldId) {
+    const response = await request({
+        action: "backup",
+        world_id: worldId,
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            response.error ||
+            "Failed to create backup"
+        );
+    }
+
+    const result =
+        response.result || {};
+
+    if (
+        result.all &&
+        Array.isArray(result.results)
+    ) {
+        console.log(
+            `Backups completed for ${result.results.length} world(s)`
+        );
+
+        console.log("");
+
+        for (const world of result.results) {
+            const displayName =
+                world.display_name ||
+                "Unknown World";
+
+            const worldId =
+                world.world_id ||
+                "Unknown";
+
+            console.log(
+                `[${world.ok ? "OK" : "FAIL"}] ${displayName}`
+            );
+
+            console.log(
+                `  World ID: ${worldId}`
+            );
+
+            if (
+                world.ok &&
+                world.result
+            ) {
+                if (world.result.file) {
+                    console.log(
+                        `  File: ${world.result.file}`
+                    );
+                }
+
+                if (
+                    world.result.size !== undefined &&
+                    world.result.size !== null
+                ) {
+                    console.log(
+                        `  Size: ${(world.result.size / 1e6).toFixed(1)} MB`
+                    );
+                }
+            }
+
+            if (
+                !world.ok &&
+                world.error
+            ) {
+                console.log(
+                    `  Error: ${world.error}`
+                );
+            }
+
+            console.log("");
+        }
+
+        return;
+    }
+
+    console.log(
+        "Backup created successfully."
+    );
+
+    console.log(
+        `  World: ${result.display_name || "Unknown World"}`
+    );
+
+    console.log(
+        `  World ID: ${result.world_id || worldId}`
+    );
+
+    if (result.result?.file) {
+        console.log(
+            `  File: ${result.result.file}`
+        );
+    }
+
+    if (
+        result.result?.size !== undefined &&
+        result.result?.size !== null
+    ) {
+        console.log(
+            `  Size: ${(result.result.size / 1e6).toFixed(1)} MB`
+        );
+    }
+}
+
 async function playersAction(action, playerId, worldId) {
     const response = await request({
         action,
@@ -691,6 +891,29 @@ async function main() {
             usage();
 
             process.exitCode = 1;
+            return;
+        }
+
+        if (action === "backup") {
+            const worldId =
+                process.argv[3];
+
+            if (!worldId) {
+                console.error(
+                    "Missing PSM world ID"
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js backup <psm-world-id|all>"
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            await backupAction(worldId);
             return;
         }
 
