@@ -452,15 +452,23 @@ async function playersAction(action, playerId, worldId) {
         );
     }
 
-    const result =
-        response.result || {};
+    const messages = {
+        kick: "Player kicked successfully.",
+        ban: "Player banned successfully.",
+        unban: "Player unbanned successfully.",
+    };
 
     console.log(
-        JSON.stringify(
-            result,
-            null,
-            2
-        )
+        messages[action] ||
+        `Player ${action} completed successfully.`
+    );
+
+    console.log(
+        `  Player ID: ${playerId}`
+    );
+
+    console.log(
+        `  World ID: ${worldId}`
     );
 }
 
