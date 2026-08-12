@@ -1186,9 +1186,18 @@ function getLinuxIntelGpu() {
             /^\s*\d+\s+shrinkable\s+\[\d+\s+free\]\s+objects,\s+(\d+)\s+bytes/m
         );
 
-            if (match) {
+        if (match) {
                 shared = Number(match[1]);
             }
+
+            console.error(
+                "GEM DEBUG:",
+                JSON.stringify({
+                    gemOutput,
+                    match: match?.[1] || null,
+                    shared,
+                })
+            );
         } catch {
             shared = null;
         }
