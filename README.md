@@ -32,9 +32,32 @@ Merging the functionality of Kevinnio's concept of the server wakeup listener to
 - **Headless Mode Can Not Edit Server Settings** Editing Server Parameters Must be Done Through GUI or directly through PalWorldSettings.ini
 
 - **Headless Mode Actions Are Limited In Scope** Initiates the worlds, activate all tasks scheduled, allow for interactive admin powers..etc
-- psm-headless <command>
-  - Program Specific - start, stop, restart, status
-> World Specific - ping, listworlds, status, activate, deactivate, worldrestart, listplayers, kick, ban, unban, broadcast, save, listschedules, save
+
+**SERVER HOST COMMANDS(affects all worlds together)**
+```
+psm-headless start
+psm-headless stop
+psm-headless restart
+psm-headless status
+```
+
+**PER WORLD COMMANDS**
+```
+psm-headless.js players list <world_id>
+psm-headless.js players kick <player_id> <world_id>
+psm-headless.js players ban <player_id> <world_id>
+psm-headless.js players unban <player_id> <world_id>
+```
+
+```
+psm-headless.js worlds list
+psm-headless.js worlds start <world_id>
+psm-headless.js worlds stop <world_id>
+psm-headless.js worlds restart <world_id>
+psm-headless.js worlds status <world_id>
+```
+
+> World Specific - ping, broadcast, save, listschedules
 - psm-monitor <command>
 > on, off, start, stop
 
