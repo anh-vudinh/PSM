@@ -441,6 +441,32 @@ async function worldsAction(action, worldId) {
     );
 }
 
+async function playersAction(action, playerId, worldId) {
+    const response = await request({
+        action,
+        world_id: worldId,
+        userid: playerId,
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            response.error ||
+            `Failed to ${action} player`
+        );
+    }
+
+    const result =
+        response.result || {};
+
+    console.log(
+        JSON.stringify(
+            result,
+            null,
+            2
+        )
+    );
+}
+
 async function main() {
     const action = process.argv[2];
 
@@ -463,47 +489,129 @@ async function main() {
                 console.error("");
 
                 console.error(
-                    "Usage: ./psm-headless.js players list <psm-world-id>"
+                    "Usage:"
+                );
+
+                console.error(
+                    "  ./psm-headless.js players list <psm-world-id>"
+                );
+
+                console.error(
+                    "  ./psm-headless.js players kick <player-id> <psm-world-id>"
+                );
+
+                console.error(
+                    "  ./psm-headless.js players ban <player-id> <psm-world-id>"
+                );
+
+                console.error(
+                    "  ./psm-headless.js players unban <player-id> <psm-world-id>"
                 );
 
                 process.exitCode = 1;
                 return;
             }
 
-            if (subcommand !== "list") {
-                console.error(
-                    `Unknown players action: ${subcommand}`
-                );
+            if (subcommand === "list") {
+                const worldId =
+                    process.argv[4];
 
-                console.error("");
+                if (!worldId) {
+                    console.error(
+                        "Missing PSM world ID"
+                    );
 
-                console.error(
-                    "Usage: ./psm-headless.js players list <psm-world-id>"
-                );
+                    console.error("");
 
-                process.exitCode = 1;
+                    console.error(
+                        "Usage: ./psm-headless.js players list <psm-world-id>"
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                await players(worldId);
                 return;
             }
 
-            const worldId =
-                process.argv[4];
+            if (
+                subcommand === "kick" ||
+                subcommand === "ban" ||
+                subcommand === "unban"
+            ) {
+                const playerId =
+                    process.argv[4];
 
-            if (!worldId) {
-                console.error(
-                    "Missing PSM world ID"
+                const worldId =
+                    process.argv[5];
+
+                if (!playerId) {
+                    console.error(
+                        `Missing player ID for players ${subcommand}`
+                    );
+
+                    console.error("");
+
+                    console.error(
+                        `Usage: ./psm-headless.js players ${subcommand} <player-id> <psm-world-id>`
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                if (!worldId) {
+                    console.error(
+                        `Missing PSM world ID for players ${subcommand}`
+                    );
+
+                    console.error("");
+
+                    console.error(
+                        `Usage: ./psm-headless.js players ${subcommand} <player-id> <psm-world-id>`
+                    );
+
+                    process.exitCode = 1;
+                    return;
+                }
+
+                await playersAction(
+                    subcommand,
+                    playerId,
+                    worldId
                 );
 
-                console.error("");
-
-                console.error(
-                    "Usage: ./psm-headless.js players list <psm-world-id>"
-                );
-
-                process.exitCode = 1;
                 return;
             }
 
-            await players(worldId);
+            console.error(
+                `Unknown players action: ${subcommand}`
+            );
+
+            console.error("");
+
+            console.error(
+                "Usage:"
+            );
+
+            console.error(
+                "  ./psm-headless.js players list <psm-world-id>"
+            );
+
+            console.error(
+                "  ./psm-headless.js players kick <player-id> <psm-world-id>"
+            );
+
+            console.error(
+                "  ./psm-headless.js players ban <player-id> <psm-world-id>"
+            );
+
+            console.error(
+                "  ./psm-headless.js players unban <player-id> <psm-world-id>"
+            );
+
+            process.exitCode = 1;
             return;
         }
 
