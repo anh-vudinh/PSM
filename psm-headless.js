@@ -144,10 +144,7 @@ async function players(worldId) {
 
         if (player.userId) {
             console.log(
-                `  Steam ID: ${player.userId.replace(
-                    "steam_",
-                    ""
-                )}`
+                `  Player ID: ${player.userId}`
             );
         }
 
