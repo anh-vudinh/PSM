@@ -105,7 +105,7 @@ function usage() {
     console.error(
     "  ./psm-headless.js schedules list <psm-world-id>"
     );
-    
+
     console.error(
     "  ./psm-headless.js broadcast <psm-world-id> \"<message>\""
     );
@@ -710,6 +710,45 @@ async function playersAction(action, playerId, worldId) {
     );
 }
 
+async function announceAction(
+    worldId,
+    message
+) {
+    const response = await request({
+        action: "announce",
+        world_id: worldId,
+        message,
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            response.error ||
+            "Failed to announce message"
+        );
+    }
+
+    const result =
+        response.result || {};
+
+    console.log(
+        "Announcement sent successfully."
+    );
+
+    console.log(
+        `  World ID: ${worldId}`
+    );
+
+    console.log(
+        `  Message: ${message}`
+    );
+
+    if (result.via) {
+        console.log(
+            `  Via: ${result.via}`
+        );
+    }
+}
+
 async function broadcastAction(worldId, message) {
     const response = await request({
         action: "broadcast",
@@ -752,6 +791,51 @@ async function main() {
     }
 
     try {
+        if (action === "announce") {
+            const worldId =
+                process.argv[3];
+
+            const message =
+                process.argv.slice(4).join(" ");
+
+            if (!worldId) {
+                console.error(
+                    "Missing PSM world ID"
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js announce <psm-world-id> \"<message>\""
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            if (!message.trim()) {
+                console.error(
+                    "Missing announcement message"
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js announce <psm-world-id> \"<message>\""
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            await announceAction(
+                worldId,
+                message
+            );
+
+            return;
+        }
+
         if (action === "broadcast") {
             const worldId =
                 process.argv[3];

@@ -72,6 +72,9 @@ psm-headless.js schedules disable <schedule_id>
 
 ```
 psm-headless.js broadcast <world_id> "<message>"
+psm-headless.js announce <world_id> "<message>"
+
+Notice: broadcast will be seen in chat box from System. announce will be see as the big red warning text in middle of the screen.
 ```
 
 - psm-monitor <command>
