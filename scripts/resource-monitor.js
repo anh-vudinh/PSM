@@ -1177,6 +1177,11 @@ function getLinuxIntelGpu() {
                 "utf8"
             );
 
+        console.error(
+            "GEM DEBUG:",
+            JSON.stringify(gemOutput)
+        );    
+
         const match = gemOutput.match(
             /^\s*\d+\s+shrinkable\s+\[\d+\s+free\]\s+objects,\s+(\d+)\s+bytes/m
         );
