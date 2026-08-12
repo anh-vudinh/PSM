@@ -1169,16 +1169,6 @@ function getLinuxIntelGpu() {
             enhance
         );
 
-        /*
-         * i915 exposes Intel integrated-GPU memory usage
-         * through the GEM objects debug file.
-         *
-         * Example:
-         *
-         * system: total:0x00000001e7dd6000 bytes
-         *
-         * Convert the hexadecimal byte count to a number.
-         */
         let shared = null;
 
         try {
@@ -1188,18 +1178,26 @@ function getLinuxIntelGpu() {
             );
 
             const match = gemOutput.match(
-                /system:\s+total:0x([0-9a-f]+)/i
+                /^\s*\d+\s+shrinkable\s+\[\d+\s+free\]\s+(\d+)\s+bytes/m
             );
 
             if (match) {
-                shared = parseInt(
-                    match[1],
-                    16
-                );
+                shared = Number(match[1]);
             }
         } catch {
             shared = null;
         }
+
+        console.error(
+            "LINUX GPU DEBUG:",
+            JSON.stringify({
+                render,
+                video,
+                blitter,
+                enhance,
+                utilization,
+            })
+        );
 
         return {
             utilization,
