@@ -1,21 +1,26 @@
 "use strict";
 
 const fs = require("fs");
-const { execFile } = require("child_process");
+const { execFileSync } = require("child_process");
 
 const REFRESH_MS = 1000;
-const GPU_SAMPLE_MS = 1000;
 
 let previousCpu = null;
 let running = true;
 let started = false;
 
-let gpuUtilization = null;
-let gpuMemoryUsed = null;
-let gpuReading = false;
+let gpuInfo = null;
+let gpuLastUpdate = 0;
+
+/*
+ * ------------------------------------------------------------
+ * CPU
+ * ------------------------------------------------------------
+ */
 
 function readCpu() {
     const stat = fs.readFileSync("/proc/stat", "utf8");
+
     const line = stat
         .split("\n")
         .find((line) => /^cpu\s/.test(line));
@@ -87,6 +92,12 @@ function getCpuUsage() {
     );
 }
 
+/*
+ * ------------------------------------------------------------
+ * MEMORY
+ * ------------------------------------------------------------
+ */
+
 function readMemory() {
     const meminfo =
         fs.readFileSync(
@@ -97,10 +108,9 @@ function readMemory() {
     const values = {};
 
     for (const line of meminfo.split("\n")) {
-        const match =
-            line.match(
-                /^(\w+):\s+(\d+)/
-            );
+        const match = line.match(
+            /^(\w+):\s+(\d+)/
+        );
 
         if (match) {
             values[match[1]] =
@@ -127,6 +137,12 @@ function readMemory() {
         total,
     };
 }
+
+/*
+ * ------------------------------------------------------------
+ * FORMATTING
+ * ------------------------------------------------------------
+ */
 
 function formatBytes(bytes) {
     if (!Number.isFinite(bytes)) {
@@ -159,177 +175,676 @@ function formatBytes(bytes) {
     return `${value.toFixed(2)} ${units[index]}`;
 }
 
-function updateGpu() {
-    if (gpuReading) {
-        return;
+/*
+ * ------------------------------------------------------------
+ * COMMAND HELPERS
+ * ------------------------------------------------------------
+ */
+
+function commandExists(command) {
+    try {
+        execFileSync(
+            "sh",
+            ["-c", `command -v ${command}`],
+            {
+                stdio: "ignore",
+            }
+        );
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function readCommand(
+    command,
+    args
+) {
+    try {
+        return execFileSync(
+            command,
+            args,
+            {
+                encoding: "utf8",
+                stdio: [
+                    "ignore",
+                    "pipe",
+                    "ignore",
+                ],
+            }
+        );
+    } catch {
+        return null;
+    }
+}
+
+/*
+ * ------------------------------------------------------------
+ * GPU NAME
+ * ------------------------------------------------------------
+ */
+
+function getGpuName() {
+    const lspci = readCommand(
+        "lspci",
+        [
+            "-nn",
+        ]
+    );
+
+    if (lspci) {
+        const lines =
+            lspci.split("\n");
+
+        for (const line of lines) {
+            if (
+                /VGA compatible controller|3D controller|Display controller/i.test(
+                    line
+                )
+            ) {
+                const match =
+                    line.match(
+                        /:\s*(?:VGA compatible controller|3D controller|Display controller):\s*(.+?)(?:\s*\[[0-9a-fA-F:]+\])?$/
+                    );
+
+                if (match) {
+                    return match[1].trim();
+                }
+
+                const colon =
+                    line.indexOf(":");
+
+                if (colon !== -1) {
+                    return line
+                        .slice(colon + 1)
+                        .replace(
+                            /^(VGA compatible controller|3D controller|Display controller):\s*/i,
+                            ""
+                        )
+                        .trim();
+                }
+            }
+        }
     }
 
-    gpuReading = true;
+    /*
+     * NVIDIA fallback.
+     */
+    if (commandExists("nvidia-smi")) {
+        const name = readCommand(
+            "nvidia-smi",
+            [
+                "--query-gpu=name",
+                "--format=csv,noheader",
+            ]
+        );
 
-    execFile(
+        if (name) {
+            const first =
+                name
+                    .split("\n")[0]
+                    .trim();
+
+            if (first) {
+                return first;
+            }
+        }
+    }
+
+    /*
+     * DRM fallback.
+     */
+    try {
+        const cards =
+            fs.readdirSync(
+                "/sys/class/drm"
+            )
+            .filter((name) =>
+                /^card\d+$/.test(name)
+            );
+
+        for (const card of cards) {
+            const uevent =
+                `/sys/class/drm/${card}/device/uevent`;
+
+            if (!fs.existsSync(uevent)) {
+                continue;
+            }
+
+            const data =
+                fs.readFileSync(
+                    uevent,
+                    "utf8"
+                );
+
+            const vendor =
+                data.match(
+                    /^PCI_ID=([0-9A-Fa-f]+):([0-9A-Fa-f]+)/m
+                );
+
+            if (vendor) {
+                return `GPU (${vendor[1]}:${vendor[2]})`;
+            }
+        }
+    } catch {}
+
+    return "Unknown GPU";
+}
+
+/*
+ * ------------------------------------------------------------
+ * INTEL GPU
+ * ------------------------------------------------------------
+ */
+
+function getIntelGpu() {
+    if (
+        !commandExists(
+            "intel_gpu_top"
+        )
+    ) {
+        return null;
+    }
+
+    const output = readCommand(
         "intel_gpu_top",
         [
             "-J",
             "-s",
-            String(GPU_SAMPLE_MS),
+            "1000",
             "-n",
             "2",
-        ],
-        {
-            maxBuffer: 1024 * 1024,
-        },
-        (error, stdout) => {
-            gpuReading = false;
+        ]
+    );
 
-            if (error) {
-                gpuUtilization = null;
-                gpuMemoryUsed = null;
-                return;
-            }
+    if (!output) {
+        return null;
+    }
 
-            try {
-                const data =
-                    JSON.parse(stdout);
+    try {
+        const data =
+            JSON.parse(output);
 
-                if (
-                    !Array.isArray(data) ||
-                    data.length === 0
-                ) {
-                    gpuUtilization = null;
-                    gpuMemoryUsed = null;
-                    return;
-                }
+        if (
+            !Array.isArray(data) ||
+            data.length === 0
+        ) {
+            return null;
+        }
 
-                const sample =
-                    data[data.length - 1];
+        /*
+         * The first sample can be extremely
+         * short. The second sample is the useful
+         * one-second measurement.
+         */
+        const sample =
+            data[data.length - 1];
 
-                /*
-                 * GPU utilization
-                 *
-                 * intel_gpu_top reports
-                 * utilization separately for
-                 * each engine.
-                 *
-                 * Use the busiest engine as
-                 * the overall GPU utilization.
-                 */
+        const engines =
+            sample.engines || {};
 
-                const engines =
-                    sample?.engines || {};
+        let utilization = 0;
 
-                const engineValues =
-                    Object.values(engines)
-                        .map(
-                            (engine) =>
-                                Number(
-                                    engine?.busy
-                                )
-                        )
-                        .filter(
-                            Number.isFinite
-                        );
+        for (const engine of Object.values(
+            engines
+        )) {
+            const busy =
+                Number(engine?.busy);
 
-                if (
-                    engineValues.length > 0
-                ) {
-                    gpuUtilization =
-                        Math.max(
-                            ...engineValues
-                        );
-                } else {
-                    gpuUtilization = null;
-                }
-
-                /*
-                 * GPU memory
-                 *
-                 * The UHD 620 is an integrated GPU,
-                 * so intel_gpu_top reports GPU
-                 * allocations as shared system
-                 * memory rather than dedicated VRAM.
-                 *
-                 * Sum the "system.total" memory
-                 * reported for all GPU clients.
-                 */
-
-                const clients =
-                    sample?.clients || {};
-
-                let totalMemory = 0;
-                let foundMemory = false;
-
-                for (const client of Object.values(
-                    clients
-                )) {
-                    const memory =
-                        Number(
-                            client?.memory
-                                ?.system
-                                ?.total
-                        );
-
-                    if (
-                        Number.isFinite(memory) &&
-                        memory >= 0
-                    ) {
-                        totalMemory += memory;
-                        foundMemory = true;
-                    }
-                }
-
-                gpuMemoryUsed =
-                    foundMemory
-                        ? totalMemory
-                        : null;
-
-            } catch {
-                gpuUtilization = null;
-                gpuMemoryUsed = null;
+            if (Number.isFinite(busy)) {
+                utilization += busy;
             }
         }
-    );
+
+        /*
+         * Don't allow multiple engine classes
+         * to produce a value above 100%.
+         */
+        utilization =
+            Math.min(100, utilization);
+
+        /*
+         * Intel integrated GPUs use system RAM
+         * rather than dedicated VRAM.
+         *
+         * We therefore use the machine's RAM
+         * total as the shared GPU memory pool.
+         *
+         * intel_gpu_top exposes per-client system
+         * memory, but that is not the same thing as
+         * "VRAM currently allocated to the GPU",
+         * so it should not be presented as such.
+         */
+        let memoryUsed = null;
+        let memoryTotal = null;
+
+        try {
+            const memory =
+                readMemory();
+
+            memoryTotal =
+                memory.total;
+
+            /*
+             * Sum the system memory belonging to
+             * GPU clients reported by intel_gpu_top.
+             *
+             * This is an approximation of GPU-visible
+             * shared memory, not dedicated VRAM.
+             */
+            const clients =
+                sample.clients || {};
+
+            let totalClientMemory = 0;
+
+            for (
+                const client
+                of Object.values(clients)
+            ) {
+                const value =
+                    Number(
+                        client?.memory?.system?.total
+                    );
+
+                if (
+                    Number.isFinite(value) &&
+                    value > 0
+                ) {
+                    totalClientMemory += value;
+                }
+            }
+
+            if (totalClientMemory > 0) {
+                memoryUsed =
+                    Math.min(
+                        totalClientMemory,
+                        memoryTotal
+                    );
+            }
+        } catch {}
+
+        return {
+            utilization,
+            memoryUsed,
+            memoryTotal,
+            shared: true,
+        };
+    } catch {
+        return null;
+    }
 }
 
-function getGpu() {
+/*
+ * ------------------------------------------------------------
+ * NVIDIA GPU
+ * ------------------------------------------------------------
+ */
+
+function getNvidiaGpu() {
+    if (
+        !commandExists("nvidia-smi")
+    ) {
+        return null;
+    }
+
+    const output = readCommand(
+        "nvidia-smi",
+        [
+            "--query-gpu=utilization.gpu,memory.used,memory.total",
+            "--format=csv,noheader,nounits",
+        ]
+    );
+
+    if (!output) {
+        return null;
+    }
+
+    const line =
+        output
+            .split("\n")
+            .find((line) =>
+                line.trim()
+            );
+
+    if (!line) {
+        return null;
+    }
+
+    const parts =
+        line
+            .split(",")
+            .map((value) =>
+                Number(value.trim())
+            );
+
+    if (parts.length < 3) {
+        return null;
+    }
+
+    const utilization = parts[0];
+    const memoryUsedMB = parts[1];
+    const memoryTotalMB = parts[2];
+
     return {
         utilization:
-            gpuUtilization,
+            Number.isFinite(
+                utilization
+            )
+                ? utilization
+                : null,
 
         memoryUsed:
-            gpuMemoryUsed,
+            Number.isFinite(
+                memoryUsedMB
+            )
+                ? memoryUsedMB * 1024 * 1024
+                : null,
+
+        memoryTotal:
+            Number.isFinite(
+                memoryTotalMB
+            )
+                ? memoryTotalMB * 1024 * 1024
+                : null,
+
+        shared: false,
     };
 }
 
+/*
+ * ------------------------------------------------------------
+ * AMD GPU
+ * ------------------------------------------------------------
+ */
+
+function getAmdGpu() {
+    try {
+        const cards =
+            fs.readdirSync(
+                "/sys/class/drm"
+            )
+            .filter((name) =>
+                /^card\d+$/.test(name)
+            );
+
+        for (const card of cards) {
+            const devicePath =
+                `/sys/class/drm/${card}/device`;
+
+            const driverPath =
+                `${devicePath}/driver`;
+
+            if (
+                !fs.existsSync(driverPath)
+            ) {
+                continue;
+            }
+
+            let driver;
+
+            try {
+                driver =
+                    fs.readlinkSync(
+                        driverPath
+                    );
+            } catch {
+                continue;
+            }
+
+            if (
+                !driver.includes(
+                    "amdgpu"
+                )
+            ) {
+                continue;
+            }
+
+            let utilization = null;
+            let memoryUsed = null;
+            let memoryTotal = null;
+
+            const busyPath =
+                `${devicePath}/gpu_busy_percent`;
+
+            if (
+                fs.existsSync(busyPath)
+            ) {
+                const value =
+                    Number(
+                        fs.readFileSync(
+                            busyPath,
+                            "utf8"
+                        ).trim()
+                    );
+
+                if (
+                    Number.isFinite(value)
+                ) {
+                    utilization = value;
+                }
+            }
+
+            /*
+             * Dedicated VRAM.
+             */
+            const vramUsedPath =
+                `${devicePath}/mem_info_vram_used`;
+
+            const vramTotalPath =
+                `${devicePath}/mem_info_vram_total`;
+
+            if (
+                fs.existsSync(
+                    vramUsedPath
+                ) &&
+                fs.existsSync(
+                    vramTotalPath
+                )
+            ) {
+                const used =
+                    Number(
+                        fs.readFileSync(
+                            vramUsedPath,
+                            "utf8"
+                        ).trim()
+                    );
+
+                const total =
+                    Number(
+                        fs.readFileSync(
+                            vramTotalPath,
+                            "utf8"
+                        ).trim()
+                    );
+
+                if (
+                    Number.isFinite(used) &&
+                    Number.isFinite(total)
+                ) {
+                    memoryUsed = used;
+                    memoryTotal = total;
+                }
+            }
+
+            /*
+             * AMD integrated graphics may expose
+             * GTT/shared memory instead.
+             */
+            if (
+                memoryTotal === null
+            ) {
+                const gttUsedPath =
+                    `${devicePath}/mem_info_gtt_used`;
+
+                const gttTotalPath =
+                    `${devicePath}/mem_info_gtt_total`;
+
+                if (
+                    fs.existsSync(
+                        gttUsedPath
+                    ) &&
+                    fs.existsSync(
+                        gttTotalPath
+                    )
+                ) {
+                    const used =
+                        Number(
+                            fs.readFileSync(
+                                gttUsedPath,
+                                "utf8"
+                            ).trim()
+                        );
+
+                    const total =
+                        Number(
+                            fs.readFileSync(
+                                gttTotalPath,
+                                "utf8"
+                            ).trim()
+                        );
+
+                    if (
+                        Number.isFinite(
+                            used
+                        ) &&
+                        Number.isFinite(
+                            total
+                        )
+                    ) {
+                        memoryUsed = used;
+                        memoryTotal = total;
+                    }
+                }
+            }
+
+            return {
+                utilization,
+                memoryUsed,
+                memoryTotal,
+                shared:
+                    memoryTotal === null,
+            };
+        }
+    } catch {}
+
+    return null;
+}
+
+/*
+ * ------------------------------------------------------------
+ * GPU
+ * ------------------------------------------------------------
+ */
+
+function getGpu() {
+    /*
+     * Don't run the GPU discovery tools every
+     * single render if the monitor refreshes
+     * quickly.
+     */
+    const now = Date.now();
+
+    if (
+        gpuInfo &&
+        now - gpuLastUpdate < 900
+    ) {
+        return gpuInfo;
+    }
+
+    /*
+     * NVIDIA first.
+     */
+    const nvidia =
+        getNvidiaGpu();
+
+    if (nvidia) {
+        gpuInfo = nvidia;
+        gpuLastUpdate = now;
+        return gpuInfo;
+    }
+
+    /*
+     * Intel.
+     */
+    const intel =
+        getIntelGpu();
+
+    if (intel) {
+        gpuInfo = intel;
+        gpuLastUpdate = now;
+        return gpuInfo;
+    }
+
+    /*
+     * AMD.
+     */
+    const amd =
+        getAmdGpu();
+
+    if (amd) {
+        gpuInfo = amd;
+        gpuLastUpdate = now;
+        return gpuInfo;
+    }
+
+    gpuInfo = {
+        utilization: null,
+        memoryUsed: null,
+        memoryTotal: null,
+        shared: false,
+    };
+
+    gpuLastUpdate = now;
+
+    return gpuInfo;
+}
+
+/*
+ * ------------------------------------------------------------
+ * DISPLAY
+ * ------------------------------------------------------------
+ */
+
+const GPU_NAME =
+    getGpuName();
+
 function render() {
-    const cpu = getCpuUsage();
-    const memory = readMemory();
-    const gpu = getGpu();
+    const cpu =
+        getCpuUsage();
+
+    const memory =
+        readMemory();
+
+    const gpu =
+        getGpu();
+
+    const gpuUtil =
+        gpu.utilization === null
+            ? "N/A"
+            : `${gpu.utilization.toFixed(1)}%`;
+
+    let vram = "N/A";
+
+    if (
+        gpu.memoryUsed !== null &&
+        gpu.memoryTotal !== null
+    ) {
+        vram =
+            `${formatBytes(gpu.memoryUsed)} / ${formatBytes(gpu.memoryTotal)}`;
+
+        if (gpu.shared) {
+            vram += " (shared)";
+        }
+    }
 
     const lines = [
-        "SYSTEM RESOURCE MONITOR",
-        "────────────────────────",
-
+        `SYSTEM RESOURCE MONITOR — ${GPU_NAME}`,
+        "────────────────────────────────────────",
         `CPU   ${cpu.toFixed(1)}%`,
-
-        `RAM   ${formatBytes(
-            memory.used
-        )} / ${formatBytes(
-            memory.total
-        )}`,
-
-        `GPU   ${
-            gpu.utilization === null
-                ? "N/A"
-                : `${gpu.utilization.toFixed(1)}%`
-        }`,
-
-        `VRAM  ${
-            gpu.memoryUsed !== null
-                ? `${formatBytes(
-                    gpu.memoryUsed
-                )} / shared`
-                : "N/A"
-        }`,
+        `RAM   ${formatBytes(memory.used)} / ${formatBytes(memory.total)}`,
+        `GPU   ${gpuUtil}`,
+        `VRAM  ${vram}`,
     ];
 
     if (started) {
@@ -349,6 +864,12 @@ function render() {
     started = true;
 }
 
+/*
+ * ------------------------------------------------------------
+ * SHUTDOWN
+ * ------------------------------------------------------------
+ */
+
 function stop() {
     if (!running) {
         return;
@@ -363,17 +884,26 @@ function stop() {
     process.exit(0);
 }
 
-process.on("SIGTERM", stop);
-process.on("SIGINT", stop);
+process.on(
+    "SIGTERM",
+    stop
+);
 
-updateGpu();
+process.on(
+    "SIGINT",
+    stop
+);
+
+/*
+ * ------------------------------------------------------------
+ * START
+ * ------------------------------------------------------------
+ */
+
 render();
 
 setInterval(() => {
-    if (!running) {
-        return;
+    if (running) {
+        render();
     }
-
-    updateGpu();
-    render();
 }, REFRESH_MS);
