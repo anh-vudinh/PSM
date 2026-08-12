@@ -58,7 +58,18 @@ psm-headless.js worlds restart <world_id> | all
 psm-headless.js worlds update <world_id>  | all
 ```
 
-> World Specific - ping, broadcast, save, listschedules
+```
+psm-headless.js backup <world_id>  | all
+```
+
+```
+psm-headless.js schedules list <world_id>
+```
+
+```
+psm-headless.js broadcast <world_id> "<message>"
+```
+
 - psm-monitor <command>
 > on, off, start, stop
 

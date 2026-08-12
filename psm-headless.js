@@ -452,8 +452,41 @@ async function main() {
 
     try {
         if (action === "players") {
-            const worldId =
+            const subcommand =
                 process.argv[3];
+
+            if (!subcommand) {
+                console.error(
+                    "Missing players subcommand"
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js players list <psm-world-id>"
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            if (subcommand !== "list") {
+                console.error(
+                    `Unknown players action: ${subcommand}`
+                );
+
+                console.error("");
+
+                console.error(
+                    "Usage: ./psm-headless.js players list <psm-world-id>"
+                );
+
+                process.exitCode = 1;
+                return;
+            }
+
+            const worldId =
+                process.argv[4];
 
             if (!worldId) {
                 console.error(
@@ -463,7 +496,7 @@ async function main() {
                 console.error("");
 
                 console.error(
-                    "Usage: ./psm-headless.js players <psm-world-id>"
+                    "Usage: ./psm-headless.js players list <psm-world-id>"
                 );
 
                 process.exitCode = 1;
