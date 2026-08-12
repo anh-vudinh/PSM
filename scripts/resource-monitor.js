@@ -4,6 +4,7 @@ const fs = require("fs");
 const { execFile } = require("child_process");
 
 const REFRESH_MS = 1000;
+const GPU_SAMPLE_MS = 1000;
 
 let previousCpu = null;
 let running = true;
@@ -13,11 +14,7 @@ let gpuUtilization = null;
 let gpuReading = false;
 
 function readCpu() {
-    const stat = fs.readFileSync(
-        "/proc/stat",
-        "utf8"
-    );
-
+    const stat = fs.readFileSync("/proc/stat", "utf8");
     const line = stat
         .split("\n")
         .find((line) => /^cpu\s/.test(line));
@@ -52,9 +49,7 @@ function readCpu() {
             softirq +
             steal,
 
-        idle:
-            idle +
-            iowait,
+        idle: idle + iowait,
     };
 }
 
@@ -71,12 +66,10 @@ function getCpuUsage() {
     }
 
     const totalDelta =
-        current.total -
-        previousCpu.total;
+        current.total - previousCpu.total;
 
     const idleDelta =
-        current.idle -
-        previousCpu.idle;
+        current.idle - previousCpu.idle;
 
     previousCpu = current;
 
@@ -88,26 +81,25 @@ function getCpuUsage() {
         0,
         Math.min(
             100,
-            100 *
-                (1 -
-                    idleDelta /
-                        totalDelta)
+            100 * (1 - idleDelta / totalDelta)
         )
     );
 }
 
 function readMemory() {
-    const meminfo = fs.readFileSync(
-        "/proc/meminfo",
-        "utf8"
-    );
+    const meminfo =
+        fs.readFileSync(
+            "/proc/meminfo",
+            "utf8"
+        );
 
     const values = {};
 
     for (const line of meminfo.split("\n")) {
-        const match = line.match(
-            /^(\w+):\s+(\d+)/
-        );
+        const match =
+            line.match(
+                /^(\w+):\s+(\d+)/
+            );
 
         if (match) {
             values[match[1]] =
@@ -160,18 +152,14 @@ function formatBytes(bytes) {
     }
 
     if (index === 0) {
-        return `${Math.round(
-            value
-        )} ${units[index]}`;
+        return `${Math.round(value)} ${units[index]}`;
     }
 
-    return `${value.toFixed(
-        2
-    )} ${units[index]}`;
+    return `${value.toFixed(2)} ${units[index]}`;
 }
 
-function readGpu() {
-    if (!running || gpuReading) {
+function updateGpu() {
+    if (gpuReading) {
         return;
     }
 
@@ -182,86 +170,72 @@ function readGpu() {
         [
             "-J",
             "-s",
-            String(REFRESH_MS),
+            String(GPU_SAMPLE_MS),
             "-n",
             "2",
         ],
         {
-            maxBuffer:
-                1024 * 1024 * 10,
+            maxBuffer: 1024 * 1024,
         },
         (error, stdout) => {
             gpuReading = false;
 
-            if (error || !stdout) {
+            if (error) {
                 gpuUtilization = null;
                 return;
             }
 
             try {
-                const samples =
+                const data =
                     JSON.parse(stdout);
 
                 if (
-                    !Array.isArray(
-                        samples
-                    ) ||
-                    samples.length === 0
+                    !Array.isArray(data) ||
+                    data.length === 0
                 ) {
                     gpuUtilization = null;
                     return;
                 }
 
                 const sample =
-                    samples[
-                        samples.length - 1
-                    ];
+                    data[data.length - 1];
 
                 const engines =
-                    sample?.engines;
+                    sample?.engines || {};
 
-                if (!engines) {
-                    gpuUtilization = null;
-                    return;
-                }
+                const values = Object.values(
+                    engines
+                )
+                    .map(
+                        (engine) =>
+                            Number(engine?.busy)
+                    )
+                    .filter(
+                        Number.isFinite
+                    );
 
-                const values =
-                    Object.values(engines)
-                        .map((engine) =>
-                            Number(
-                                engine?.busy
-                            )
-                        )
-                        .filter(
-                            Number.isFinite
-                        );
-
-                if (!values.length) {
+                if (values.length === 0) {
                     gpuUtilization = null;
                     return;
                 }
 
                 /*
-                 * Use the busiest engine as
+                 * Intel exposes separate engine
+                 * utilization values.
+                 *
+                 * Use the busiest engine as the
                  * overall GPU utilization.
                  *
-                 * Example:
-                 * Render/3D = 4.5%
-                 * Video    = 13.6%
+                 * For example:
                  *
-                 * Display = 13.6%
+                 * Render/3D = 4.5%
+                 * Video     = 15.2%
+                 *
+                 * GPU = 15.2%
                  */
                 gpuUtilization =
                     Math.max(...values);
 
-                gpuUtilization =
-                    Math.max(
-                        0,
-                        Math.min(
-                            100,
-                            gpuUtilization
-                        )
-                    );
             } catch {
                 gpuUtilization = null;
             }
@@ -275,8 +249,8 @@ function getGpu() {
             gpuUtilization,
 
         /*
-         * UHD 620 uses shared system
-         * memory rather than dedicated VRAM.
+         * UHD 620 is an integrated GPU.
+         * It does not have dedicated VRAM.
          */
         memoryUsed: null,
         memoryTotal: null,
@@ -291,27 +265,29 @@ function render() {
     const lines = [
         "SYSTEM RESOURCE MONITOR",
         "────────────────────────",
+
         `CPU   ${cpu.toFixed(1)}%`,
+
         `RAM   ${formatBytes(
             memory.used
         )} / ${formatBytes(
             memory.total
         )}`,
+
         `GPU   ${
             gpu.utilization === null
                 ? "N/A"
-                : `${gpu.utilization.toFixed(
-                      1
-                  )}%`
+                : `${gpu.utilization.toFixed(1)}%`
         }`,
+
         `VRAM  ${
             gpu.memoryUsed !== null &&
             gpu.memoryTotal !== null
                 ? `${formatBytes(
-                      gpu.memoryUsed
-                  )} / ${formatBytes(
-                      gpu.memoryTotal
-                  )}`
+                    gpu.memoryUsed
+                )} / ${formatBytes(
+                    gpu.memoryTotal
+                )}`
                 : "N/A"
         }`,
     ];
@@ -325,8 +301,8 @@ function render() {
     for (const line of lines) {
         process.stdout.write(
             "\x1b[2K\r" +
-                line +
-                "\n"
+            line +
+            "\n"
         );
     }
 
@@ -350,7 +326,7 @@ function stop() {
 process.on("SIGTERM", stop);
 process.on("SIGINT", stop);
 
-readGpu();
+updateGpu();
 render();
 
 setInterval(() => {
@@ -358,6 +334,6 @@ setInterval(() => {
         return;
     }
 
+    updateGpu();
     render();
-    readGpu();
 }, REFRESH_MS);
