@@ -642,55 +642,6 @@ async function backupAction(worldId) {
     }
 }
 
-async function schedulesList(worldId) {
-    const response = await request({
-        action: "schedules",
-        world_id: worldId,
-    });
-
-    if (!response.ok) {
-        throw new Error(
-            response.error ||
-            "Failed to list schedules"
-        );
-    }
-
-    const result =
-        response.result || {};
-
-    const schedules =
-        Array.isArray(result.schedules)
-            ? result.schedules
-            : [];
-
-    console.log(
-        `Schedules: ${schedules.length}`
-    );
-
-    console.log("");
-
-    if (schedules.length === 0) {
-        console.log("No schedules found.");
-        return;
-    }
-
-    for (const schedule of schedules) {
-        console.log(
-            `Schedule ID: ${schedule.id ?? "Unknown"}`
-        );
-
-        console.log(
-            JSON.stringify(
-                schedule,
-                null,
-                2
-            )
-        );
-
-        console.log("");
-    }
-}
-
 async function schedulesAction(subcommand, value) {
     const payload = {
         action: "schedules",
@@ -737,44 +688,40 @@ async function schedulesAction(subcommand, value) {
 
         for (const schedule of schedules) {
             console.log(
-                `Schedule ID: ${schedule.id}`
+                `[${schedule.enabled ? "ENABLED" : "DISABLED"}] ${schedule.job_type}`
             );
 
             console.log(
-                `  Job: ${schedule.job_type}`
+                `  Schedule ID: ${schedule.id}`
             );
-
-            if (
-                schedule.interval_hours !== null &&
-                schedule.interval_hours !== undefined
-            ) {
-                console.log(
-                    `  Interval: ${schedule.interval_hours} hour(s)`
-                );
-            }
 
             if (
                 schedule.interval_minutes !== null &&
                 schedule.interval_minutes !== undefined
             ) {
                 console.log(
-                    `  Interval: ${schedule.interval_minutes} minute(s)`
+                    `  Interval: Every ${schedule.interval_minutes} minute${
+                        Number(schedule.interval_minutes) === 1
+                            ? ""
+                            : "s"
+                    }`
                 );
-            }
-
-            if (schedule.time_of_day) {
+            } else if (
+                schedule.interval_hours !== null &&
+                schedule.interval_hours !== undefined
+            ) {
+                console.log(
+                    `  Interval: Every ${schedule.interval_hours} hour${
+                        Number(schedule.interval_hours) === 1
+                            ? ""
+                            : "s"
+                    }`
+                );
+            } else if (schedule.time_of_day) {
                 console.log(
                     `  Time: ${schedule.time_of_day}`
                 );
             }
-
-            console.log(
-                `  Enabled: ${
-                    schedule.enabled
-                        ? "yes"
-                        : "no"
-                }`
-            );
 
             console.log(
                 `  Last Run: ${
