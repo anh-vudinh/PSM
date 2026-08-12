@@ -23,6 +23,9 @@ Merging the functionality of Kevinnio's concept of the server wakeup listener to
 - **Headless System-wide Resource Monitor** see system-wide resource usage
   - psm-monitor <command>
 
+## Must Do Before To Use Commands From Any Location
+
+
 ## Important Things to Note
 
 - **Additional Features Were Made For Linux Server** currently untested with other OS
@@ -43,36 +46,36 @@ psm-headless status
 
 **PER WORLD COMMANDS**
 ```
-psm-headless.js players list <world_id>
-psm-headless.js players kick <player_id> <world_id>
-psm-headless.js players ban <player_id> <world_id>
-psm-headless.js players unban <player_id> <world_id>
+psm-headless players list <world_id>
+psm-headless players kick <player_id> <world_id>
+psm-headless players ban <player_id> <world_id>
+psm-headless players unban <player_id> <world_id>
 
 Warning: bUseAuth must be enabled or bans may not be enforced.
 ```
 
 ```
-psm-headless.js worlds list
-psm-headless.js worlds status <world_id>
-psm-headless.js worlds graceful-stop <world_id | all> <wait_time_seconds> "<message>"
-psm-headless.js worlds start <world_id | all>
-psm-headless.js worlds stop <world_id | all>
-psm-headless.js worlds restart <world_id | all>
-psm-headless.js worlds update <world_id | all>
+psm-headless worlds list
+psm-headless worlds status <world_id>
+psm-headless worlds graceful-stop <world_id | all> <wait_time_seconds> "<message>"
+psm-headless worlds start <world_id | all>
+psm-headless worlds stop <world_id | all>
+psm-headless worlds restart <world_id | all>
+psm-headless worlds update <world_id | all>
 ```
 
 ```
-psm-headless.js backup <world_id>  | all
+psm-headless backup <world_id>  | all
 ```
 
 ```
-psm-headless.js schedules list <world_id>
-psm-headless.js schedules enable <schedule_id>
-psm-headless.js schedules disable <schedule_id>
+psm-headless schedules list <world_id>
+psm-headless schedules enable <schedule_id>
+psm-headless schedules disable <schedule_id>
 ```
 
 ```
-psm-headless.js broadcast <world_id> "<message>"
+psm-headless broadcast <world_id> "<message>"
 ```
 
 **RESOURCE MONITOR**
