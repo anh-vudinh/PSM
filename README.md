@@ -47,6 +47,8 @@ psm-headless.js players list <world_id>
 psm-headless.js players kick <player_id> <world_id>
 psm-headless.js players ban <player_id> <world_id>
 psm-headless.js players unban <player_id> <world_id>
+
+Warning: bUseAuth must be enabled or bans may not be enforced.
 ```
 
 ```
