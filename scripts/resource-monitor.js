@@ -1110,7 +1110,7 @@ function getLinuxIntelGpu() {
             ],
             {
                 encoding: "utf8",
-                timeout: 2500,
+                timeout: 10000,
                 maxBuffer: 4 * 1024 * 1024,
                 stdio: [
                     "ignore",
