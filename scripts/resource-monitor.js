@@ -9,7 +9,6 @@ const REFRESH_MS = 1000;
 let windowsGpuStaticInfo = null;
 let previousCpu = null;
 let running = true;
-let started = false;
 let previousRenderLines = 0;
 
 const PLATFORM = process.platform;
@@ -624,7 +623,6 @@ function getWindowsGpuStaticInfo() {
     const output = runPowerShell(`
         $dxdiagFile = Join-Path $env:TEMP 'psm-dxdiag.txt'
 
-        $name = "Unknown GPU"
         $dedicatedTotal = 0
 
         try {
@@ -633,16 +631,6 @@ function getWindowsGpuStaticInfo() {
 
             if (Test-Path $dxdiagFile) {
                 $dxdiag = Get-Content $dxdiagFile -Raw
-
-                $nameMatch = [regex]::Match(
-                    $dxdiag,
-                    'Card name:\\s*(.+)',
-                    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
-                )
-
-                if ($nameMatch.Success) {
-                    $name = $nameMatch.Groups[1].Value.Trim()
-                }
 
                 $memoryMatch = [regex]::Match(
                     $dxdiag,
@@ -738,32 +726,20 @@ function getWindowsAdapterMemory() {
         const data = JSON.parse(output);
 
         try {
-    const data = JSON.parse(output);
-
-    return {
-        dedicated:
-            Number(data.Dedicated) || 0,
-
-        shared:
-            Number(data.Shared) || 0,
-    };
-    } catch {
-        return {
-            dedicated: 0,
-            shared: 0,
-        };
-    }
-
+        const data = JSON.parse(output);
         return {
             dedicated:
                 Number(data.Dedicated) || 0,
 
             shared:
                 Number(data.Shared) || 0,
-
-            dedicatedTotal:
-                Number(data.DedicatedTotal) || 0,
         };
+        } catch {
+            return {
+                dedicated: 0,
+                shared: 0,
+            };
+        }
     } catch {
         return {
             dedicated: 0,
@@ -812,7 +788,7 @@ function getLinuxIntelGpu() {
             ],
             {
                 encoding: "utf8",
-                timeout: 10000,
+                timeout: 5000,
                 maxBuffer: 4 * 1024 * 1024,
                 stdio: [
                     "ignore",
@@ -1111,7 +1087,6 @@ function render() {
 
     previousRenderLines = lines.length;
 
-    started = true;
 }
 
 /* -------------------------------------------------------------------------- */
