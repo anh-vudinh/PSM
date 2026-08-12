@@ -11,6 +11,7 @@ let running = true;
 let started = false;
 
 let gpuUtilization = null;
+let gpuMemoryUsed = null;
 let gpuReading = false;
 
 function readCpu() {
@@ -182,6 +183,7 @@ function updateGpu() {
 
             if (error) {
                 gpuUtilization = null;
+                gpuMemoryUsed = null;
                 return;
             }
 
@@ -194,50 +196,95 @@ function updateGpu() {
                     data.length === 0
                 ) {
                     gpuUtilization = null;
+                    gpuMemoryUsed = null;
                     return;
                 }
 
                 const sample =
                     data[data.length - 1];
 
+                /*
+                 * GPU utilization
+                 *
+                 * intel_gpu_top reports
+                 * utilization separately for
+                 * each engine.
+                 *
+                 * Use the busiest engine as
+                 * the overall GPU utilization.
+                 */
+
                 const engines =
                     sample?.engines || {};
 
-                const values = Object.values(
-                    engines
-                )
-                    .map(
-                        (engine) =>
-                            Number(engine?.busy)
-                    )
-                    .filter(
-                        Number.isFinite
-                    );
+                const engineValues =
+                    Object.values(engines)
+                        .map(
+                            (engine) =>
+                                Number(
+                                    engine?.busy
+                                )
+                        )
+                        .filter(
+                            Number.isFinite
+                        );
 
-                if (values.length === 0) {
+                if (
+                    engineValues.length > 0
+                ) {
+                    gpuUtilization =
+                        Math.max(
+                            ...engineValues
+                        );
+                } else {
                     gpuUtilization = null;
-                    return;
                 }
 
                 /*
-                 * Intel exposes separate engine
-                 * utilization values.
+                 * GPU memory
                  *
-                 * Use the busiest engine as the
-                 * overall GPU utilization.
+                 * The UHD 620 is an integrated GPU,
+                 * so intel_gpu_top reports GPU
+                 * allocations as shared system
+                 * memory rather than dedicated VRAM.
                  *
-                 * For example:
-                 *
-                 * Render/3D = 4.5%
-                 * Video     = 15.2%
-                 *
-                 * GPU = 15.2%
+                 * Sum the "system.total" memory
+                 * reported for all GPU clients.
                  */
-                gpuUtilization =
-                    Math.max(...values);
+
+                const clients =
+                    sample?.clients || {};
+
+                let totalMemory = 0;
+                let foundMemory = false;
+
+                for (const client of Object.values(
+                    clients
+                )) {
+                    const memory =
+                        Number(
+                            client?.memory
+                                ?.system
+                                ?.total
+                        );
+
+                    if (
+                        Number.isFinite(memory) &&
+                        memory >= 0
+                    ) {
+                        totalMemory += memory;
+                        foundMemory = true;
+                    }
+                }
+
+                gpuMemoryUsed =
+                    foundMemory
+                        ? totalMemory
+                        : null;
 
             } catch {
                 gpuUtilization = null;
+                gpuMemoryUsed = null;
             }
         }
     );
@@ -248,12 +295,8 @@ function getGpu() {
         utilization:
             gpuUtilization,
 
-        /*
-         * UHD 620 is an integrated GPU.
-         * It does not have dedicated VRAM.
-         */
-        memoryUsed: null,
-        memoryTotal: null,
+        memoryUsed:
+            gpuMemoryUsed,
     };
 }
 
@@ -281,13 +324,10 @@ function render() {
         }`,
 
         `VRAM  ${
-            gpu.memoryUsed !== null &&
-            gpu.memoryTotal !== null
+            gpu.memoryUsed !== null
                 ? `${formatBytes(
                     gpu.memoryUsed
-                )} / ${formatBytes(
-                    gpu.memoryTotal
-                )}`
+                )} / shared`
                 : "N/A"
         }`,
     ];
