@@ -1169,22 +1169,43 @@ function getLinuxIntelGpu() {
             enhance
         );
 
-        console.error(
-            "LINUX GPU DEBUG:",
-            JSON.stringify({
-                render,
-                video,
-                blitter,
-                enhance,
-                utilization,
-            })
-        );
+        /*
+         * i915 exposes Intel integrated-GPU memory usage
+         * through the GEM objects debug file.
+         *
+         * Example:
+         *
+         * system: total:0x00000001e7dd6000 bytes
+         *
+         * Convert the hexadecimal byte count to a number.
+         */
+        let shared = null;
+
+        try {
+            const gemOutput = fs.readFileSync(
+                "/sys/kernel/debug/dri/0000:00:02.0/i915_gem_objects",
+                "utf8"
+            );
+
+            const match = gemOutput.match(
+                /system:\s+total:0x([0-9a-f]+)/i
+            );
+
+            if (match) {
+                shared = parseInt(
+                    match[1],
+                    16
+                );
+            }
+        } catch {
+            shared = null;
+        }
 
         return {
             utilization,
             memoryUsed: null,
             memoryTotal: null,
-            shared: null,
+            shared,
         };
     } catch {
         return {
@@ -1340,7 +1361,7 @@ function render() {
         );
     } else {
         lines.push(
-            `GPU   ${
+            `iGPU   ${
                 gpu.utilization !== null
                     ? `${gpu.utilization.toFixed(1)}%`
                     : "N/A"
