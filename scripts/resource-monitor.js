@@ -1169,6 +1169,17 @@ function getLinuxIntelGpu() {
             enhance
         );
 
+        console.error(
+            "LINUX GPU DEBUG:",
+            JSON.stringify({
+                render,
+                video,
+                blitter,
+                enhance,
+                utilization,
+            })
+        );
+
         return {
             utilization,
             memoryUsed: null,
