@@ -32,9 +32,11 @@ BIN_DIR="$HOME/.local/bin"
 PSM_HEADLESS="$PSM_DIR/psm-headless.js"
 HEADLESS="$PSM_DIR/headless.sh"
 PSM_MONITOR="$PSM_DIR/psm-monitor"
+PSM_GUI_RELEASE_DIR="$PSM_DIR/release"
 
 HEADLESS_WRAPPER="$BIN_DIR/psm-headless"
 MONITOR_WRAPPER="$BIN_DIR/psm-monitor"
+GUI_WRAPPER="$BIN_DIR/psm-gui"
 
 PATH_MARKER="# PSM PATH - managed by createpaths.sh"
 
@@ -69,6 +71,12 @@ fi
 if [[ ! -f "$PSM_MONITOR" ]]; then
     echo "ERROR: psm-monitor was not found:"
     echo "  $PSM_MONITOR"
+    exit 1
+fi
+
+if [[ ! -d "$PSM_GUI_RELEASE_DIR" ]]; then
+    echo "ERROR: release directory was not found:"
+    echo "  $PSM_GUI_RELEASE_DIR"
     exit 1
 fi
 
@@ -123,6 +131,99 @@ exec "\$PSM_DIR/psm-monitor" "\$@"
 EOF
 
 chmod +x "$MONITOR_WRAPPER"
+
+# ------------------------------------------------------------
+# Create psm-gui wrapper
+# ------------------------------------------------------------
+
+cat > "$GUI_WRAPPER" <<EOF
+#!/usr/bin/env bash
+
+set -e
+
+PSM_DIR="$PSM_DIR"
+RELEASE_DIR="\$PSM_DIR/release"
+
+find_appimage() {
+    find "\$RELEASE_DIR" \
+        -maxdepth 1 \
+        -type f \
+        -iname 'Palworld Server Manager*.AppImage' \
+        -print -quit
+}
+
+find_gui_pid() {
+    pgrep -f 'Palworld Server Manager.*\.AppImage' 2>/dev/null | head -n 1
+}
+
+case "\${1:-}" in
+    start)
+        APPIMAGE="\$(find_appimage)"
+
+        if [[ -z "\$APPIMAGE" ]]; then
+            echo "ERROR: Palworld Server Manager AppImage was not found:"
+            echo "  \$RELEASE_DIR"
+            exit 1
+        fi
+
+        if [[ -n "\$(find_gui_pid)" ]]; then
+            echo "PSM GUI is already running."
+            exit 0
+        fi
+
+        chmod +x "\$APPIMAGE"
+        nohup "\$APPIMAGE" >/dev/null 2>&1 &
+        echo "PSM GUI started."
+        ;;
+
+    stop)
+        PIDS="\$(pgrep -f 'Palworld Server Manager.*\.AppImage' 2>/dev/null || true)"
+
+        if [[ -z "\$PIDS" ]]; then
+            echo "PSM GUI is not running."
+            exit 0
+        fi
+
+        echo "\$PIDS" | while read -r PID; do
+            kill -TERM "\$PID" 2>/dev/null || true
+        done
+
+        sleep 1
+
+        PIDS="\$(pgrep -f 'Palworld Server Manager.*\.AppImage' 2>/dev/null || true)"
+
+        if [[ -n "\$PIDS" ]]; then
+            echo "\$PIDS" | while read -r PID; do
+                kill -KILL "\$PID" 2>/dev/null || true
+            done
+        fi
+
+        echo "PSM GUI stopped."
+        ;;
+
+    status)
+        PID="\$(find_gui_pid)"
+
+        if [[ -n "\$PID" ]]; then
+            echo "PSM GUI is running."
+            echo "PID: \$PID"
+        else
+            echo "PSM GUI is NOT running."
+        fi
+        ;;
+
+    help|-h|--help)
+        echo "Usage: psm-gui {start|stop|status}"
+        ;;
+
+    *)
+        echo "Usage: psm-gui {start|stop|status}"
+        exit 1
+        ;;
+esac
+EOF
+
+chmod +x "$GUI_WRAPPER"
 
 # ------------------------------------------------------------
 # Add ~/.local/bin to PATH if necessary
@@ -254,6 +355,7 @@ echo
 echo "Commands created:"
 echo "  $HEADLESS_WRAPPER"
 echo "  $MONITOR_WRAPPER"
+echo "  $GUI_WRAPPER"
 echo
 echo "You can now run:"
 echo
@@ -270,6 +372,10 @@ echo
 echo "  psm-monitor start"
 echo "  psm-monitor stop"
 echo "  psm-monitor help"
+echo
+echo "  psm-gui start"
+echo "  psm-gui stop"
+echo "  psm-gui status"
 echo
 echo "These commands can be run from anywhere."
 echo

@@ -13,6 +13,7 @@ BIN_DIR="$HOME/.local/bin"
 
 HEADLESS_WRAPPER="$BIN_DIR/psm-headless"
 MONITOR_WRAPPER="$BIN_DIR/psm-monitor"
+GUI_WRAPPER="$BIN_DIR/psm-gui"
 
 PATH_MARKER="# PSM PATH - managed by createpaths.sh"
 
@@ -46,6 +47,16 @@ if [[ -f "$MONITOR_WRAPPER" ]]; then
 else
     echo "Not found:"
     echo "  $MONITOR_WRAPPER"
+fi
+
+if [[ -f "$GUI_WRAPPER" ]]; then
+    rm -f "$GUI_WRAPPER"
+    echo "Removed:"
+    echo "  $GUI_WRAPPER"
+    REMOVED_ANY=true
+else
+    echo "Not found:"
+    echo "  $GUI_WRAPPER"
 fi
 
 # ------------------------------------------------------------
@@ -106,6 +117,7 @@ echo "The following PSM-created commands were removed:"
 echo
 echo "  psm-headless"
 echo "  psm-monitor"
+echo "  psm-gui"
 echo
 echo "Your PSM files were NOT modified."
 echo "Your ~/.local/bin directory was NOT removed."
