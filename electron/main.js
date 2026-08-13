@@ -1,5 +1,5 @@
 // electron/main.js
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, Tray, nativeImage, powerSaveBlocker } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, Tray, nativeImage, powerSaveBlocker, globalShortcut } = require("electron");
 
 // Keep background work full-speed when the window is minimized (issue #29).
 // PalServer's tick loop follows the *system-wide* timer resolution. A foreground
@@ -470,6 +470,14 @@ function showErrorWindow(message) {
 
 function main() {
   app.whenReady().then(async () => {
+    // Ctrl/Cmd+C quits the app even when the window is hidden to the tray. This is a
+    // convenience for devs who run the app from a terminal and want a quick way to kill
+    // it without hunting for the tray icon.  
+    globalShortcut.register("CommandOrControl+C", () => {
+      quitting = true;
+      app.quit();
+    });
+
     // Ensures Windows uses our icon (not the default Electron one) in the taskbar.
     if (process.platform === "win32") app.setAppUserModelId("com.palworld.servermanager");
     // Keep the OS from suspending this process (and starving the game server it hosts)
