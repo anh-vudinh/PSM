@@ -71,47 +71,47 @@ function usage() {
     );
 
     console.error(
-        "  ./psm-headless.js players <psm-world-id>"
+        "  psm-headless players list <world-id>"
     );
 
     console.error(
-        "  ./psm-headless.js worlds list"
+        "  psm-headless worlds list"
     );
 
     console.error(
-        "  ./psm-headless.js worlds status <psm-world-id>"
+        "  psm-headless worlds status <psm-world-id>"
     );
 
     console.error(
-        "  ./psm-headless.js worlds start <psm-world-id|all>"
+        "  psm-headless worlds start <psm-world-id|all>"
     );
 
     console.error(
-        "  ./psm-headless.js worlds stop <psm-world-id|all>"
+        "  psm-headless worlds stop <psm-world-id|all>"
     );
 
     console.error(
-    "  ./psm-headless.js worlds graceful-stop <psm-world-id|all> <wait_time_seconds> \"<message>\""
+        "  psm-headless worlds graceful-stop <psm-world-id|all> <wait_time_seconds> \"<message>\""
     );
 
     console.error(
-        "  ./psm-headless.js worlds restart <psm-world-id|all>"
+        "  psm-headless worlds restart <psm-world-id|all>"
     );
 
     console.error(
-        "  ./psm-headless.js worlds update <psm-world-id|all>"
+        "  psm-headless worlds update <psm-world-id|all>"
     );
 
     console.error(
-        "  ./psm-headless.js backup <psm-world-id|all>"
+        "  psm-headless backup <psm-world-id|all>"
     );
 
     console.error(
-    "  ./psm-headless.js schedules list <psm-world-id>"
+        "  psm-headless schedules list <psm-world-id>"
     );
 
     console.error(
-    "  ./psm-headless.js broadcast <psm-world-id> \"<message>\""
+        "  psm-headless broadcast <psm-world-id> \"<message>\""
     );
     
 }
@@ -771,7 +771,7 @@ async function main() {
                 console.error("");
 
                 console.error(
-                    "Usage: ./psm-headless.js broadcast <psm-world-id> \"<message>\""
+                    "Usage: psm-headless broadcast <psm-world-id> \"<message>\""
                 );
 
                 process.exitCode = 1;
@@ -786,7 +786,7 @@ async function main() {
                 console.error("");
 
                 console.error(
-                    "Usage: ./psm-headless.js broadcast <psm-world-id> \"<message>\""
+                    "Usage: psm-headless broadcast <psm-world-id> \"<message>\""
                 );
 
                 process.exitCode = 1;
@@ -817,19 +817,19 @@ async function main() {
                 );
 
                 console.error(
-                    "  ./psm-headless.js players list <psm-world-id>"
+                    "  psm-headless players list <psm-world-id>"
                 );
 
                 console.error(
-                    "  ./psm-headless.js players kick <player-id> <psm-world-id>"
+                    "  psm-headless players kick <player-id> <psm-world-id>"
                 );
 
                 console.error(
-                    "  ./psm-headless.js players ban <player-id> <psm-world-id>"
+                    "  psm-headless players ban <player-id> <psm-world-id>"
                 );
 
                 console.error(
-                    "  ./psm-headless.js players unban <player-id> <psm-world-id>"
+                    "  psm-headless players unban <player-id> <psm-world-id>"
                 );
 
                 process.exitCode = 1;
@@ -848,7 +848,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        "Usage: ./psm-headless.js players list <psm-world-id>"
+                        "Usage: psm-headless players list <psm-world-id>"
                     );
 
                     process.exitCode = 1;
@@ -878,7 +878,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        `Usage: ./psm-headless.js players ${subcommand} <player-id> <psm-world-id>`
+                        `Usage: psm-headless players ${subcommand} <player-id> <psm-world-id>`
                     );
 
                     process.exitCode = 1;
@@ -893,7 +893,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        `Usage: ./psm-headless.js players ${subcommand} <player-id> <psm-world-id>`
+                        `Usage: psm-headless players ${subcommand} <player-id> <psm-world-id>`
                     );
 
                     process.exitCode = 1;
@@ -920,19 +920,19 @@ async function main() {
             );
 
             console.error(
-                "  ./psm-headless.js players list <psm-world-id>"
+                "  psm-headless players list <psm-world-id>"
             );
 
             console.error(
-                "  ./psm-headless.js players kick <player-id> <psm-world-id>"
+                "  psm-headless players kick <player-id> <psm-world-id>"
             );
 
             console.error(
-                "  ./psm-headless.js players ban <player-id> <psm-world-id>"
+                "  psm-headless players ban <player-id> <psm-world-id>"
             );
 
             console.error(
-                "  ./psm-headless.js players unban <player-id> <psm-world-id>"
+                "  psm-headless players unban <player-id> <psm-world-id>"
             );
 
             process.exitCode = 1;
@@ -975,7 +975,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                        'Usage: psm-headless worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
                     );
 
                     process.exitCode = 1;
@@ -993,7 +993,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                        'Usage: psm-headless worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
                     );
 
                     process.exitCode = 1;
@@ -1012,7 +1012,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                        'Usage: psm-headless worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
                     );
 
                     process.exitCode = 1;
@@ -1027,7 +1027,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        'Usage: ./psm-headless.js worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
+                        'Usage: psm-headless worlds graceful-stop <psm-world-id|all> <waittime> "<message>"'
                     );
 
                     process.exitCode = 1;
@@ -1143,11 +1143,11 @@ async function main() {
                         subcommand === "update"
                     ) {
                         console.error(
-                            `Usage: ./psm-headless.js worlds ${subcommand} <psm-world-id|all>`
+                            `Usage: psm-headless worlds ${subcommand} <psm-world-id|all>`
                         );
                     } else {
                         console.error(
-                            `Usage: ./psm-headless.js worlds ${subcommand} <psm-world-id>`
+                            `Usage: psm-headless worlds ${subcommand} <psm-world-id>`
                         );
                     }
 
@@ -1190,7 +1190,7 @@ async function main() {
                 console.error("");
 
                 console.error(
-                    "Usage: ./psm-headless.js backup <psm-world-id|all>"
+                    "Usage: psm-headless backup <psm-world-id|all>"
                 );
 
                 process.exitCode = 1;
@@ -1217,15 +1217,15 @@ async function main() {
                 );
 
                 console.error(
-                    "  ./psm-headless.js schedules list <psm-world-id>"
+                    "  psm-headless schedules list <psm-world-id>"
                 );
 
                 console.error(
-                    "  ./psm-headless.js schedules enable <schedule-id>"
+                    "  psm-headless schedules enable <schedule-id>"
                 );
 
                 console.error(
-                    "  ./psm-headless.js schedules disable <schedule-id>"
+                    "  psm-headless schedules disable <schedule-id>"
                 );
 
                 process.exitCode = 1;
@@ -1252,7 +1252,7 @@ async function main() {
                     console.error("");
 
                     console.error(
-                        `Usage: ./psm-headless.js schedules ${subcommand} ${
+                        `Usage: psm-headless schedules ${subcommand} ${
                             subcommand === "list"
                                 ? "<psm-world-id>"
                                 : "<schedule-id>"
@@ -1282,15 +1282,15 @@ async function main() {
             );
 
             console.error(
-                "  ./psm-headless.js schedules list <psm-world-id>"
+                "  psm-headless schedules list <psm-world-id>"
             );
 
             console.error(
-                "  ./psm-headless.js schedules enable <schedule-id>"
+                "  psm-headless schedules enable <schedule-id>"
             );
 
             console.error(
-                "  ./psm-headless.js schedules disable <schedule-id>"
+                "  psm-headless schedules disable <schedule-id>"
             );
 
             process.exitCode = 1;

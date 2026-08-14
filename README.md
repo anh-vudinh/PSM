@@ -115,34 +115,45 @@ gives a text table showing cpu,gpu,vram, ram utilization. Meant to just be used 
 
 2. **Navigate** to the root folder of the source code where you see .gtattributes and .gitignore
 
-3. **Run** npm install && npm run dist:linux, this will build the .AppImage in release 
+3. **Run** npm install && npm run dist:linux, this will build the .AppImage in the release folder
 
 4. **Run** createpaths.sh, this will establish the paths neccessary to call the program from anywhere (removepaths.sh will undo the paths made if you want to remove them in the future)
 
-5. **Run** psm-gui start, you must use the GUI once to connect your PalServer folder to the Palworld Server Manager. Create World or Add Exisiting World.
+5. **Run** psm-gui start, you must use the GUI once to connect your PalServer folder to the Palworld Server Manager. Create World or Add Exisiting World. **If you're using cage and get stuck here look at #Trouble Shoot**
 
-6. **Configure** configure your world, save all relevant fields that matter to you, add schedule tasks.
+6. After the GUI loads, **Create Your World** or add an exisiting one. Path it to your PalServer Folder.
+
+7. **Configure** configure your world, save all relevant fields that matter to you, add schedule tasks.
   - In schedule task, you can choose shutdown server after idle in combination with the wakeup listener I created. This combo will shut down the server when no one is on it after X amount of time, and then the wakeup listener will turn the server back on instantly when any player tries to connect. Helps saves server resources and power. 
 
-7. Fully **Close** psm-gui when you're done configuring through it. In the future you wont need the GUI portion other than to edit server settings or "adding/deleting/edit" scheduled tasks. **CTRL+C has been added to initate closing the GUI app. Use case is when compositor hijacks the terminal and you have no other methods of running psm-headless stop** 
+8. Fully **Close** psm-gui when you're done configuring through it. In the future you wont need the GUI portion other than to edit server settings or "adding/deleting/edit" scheduled tasks. **CTRL+C has been added to initate closing the GUI app. Use case is when compositor hijacks the terminal and you have no other methods of running psm-headless stop** 
 
-8. **Run the server headless** you can now use psm-headless start to get the servers operational through terminal without wasting resources on the GUI manager or running a desktop enivornment. Look to the CLI section above for available commands.
+9. **Run the server headless** you can now use psm-headless start to get the servers operational through terminal without wasting resources on the GUI manager or running a desktop enivornment. Look to the CLI section above for available commands.
 
 ---
 
 ## Some Packages Needed if Asked For
 (package managers differ. pacman is for Arch Linux, maybe you might use apt or some other one)
-pacman -S npm | Needed to build the .AppImage
-pacman -S cage | Runs psm-gui if you're on a terminal only OS like minimal Arch Linux
-pacman -S fuse2 | To run .AppImage
-pacman -S intel-gpu-tools | needed by psm-monitor to read vram or shared ram values of intel cpu/igpu
-pacman -S noip | if you want to establish a ddns for your server, requires setup
-pacman -S openssh | if you want to remote into your game server's terminal
-pacman -S ufw | firewall to block all ports other than the ones you allow
-pacman -S steam | if you want the dedicated server files directly from steam. psm-GUI has an update feature of it's own
-pacman -S thunar | if you want to acces a GUI file explorer
-pacman -S xorg-xwayland | another different compositor that some may need
+- pacman -S npm | Needed to build the .AppImage
+- pacman -S cage | Runs psm-gui if you're on a terminal only OS like minimal Arch Linux
+- pacman -S fuse2 | To run .AppImage
+- pacman -S intel-gpu-tools | needed by psm-monitor to read vram or shared ram values of intel cpu/igpu
+- pacman -S noip | if you want to establish a ddns for your server, requires setup
+- pacman -S openssh | if you want to remote into your game server's terminal
+- pacman -S ufw | firewall to block all ports other than the ones you allow
+- pacman -S steam | if you want the dedicated server files directly from steam. psm-GUI has an update feature of it's own
+- pacman -S thunar | if you want to access a GUI file explorer
+- pacman -S xorg-xwayland | another different compositor that some may need
 
+## Troubleshoot
+1) **You can type "cage -- psm-gui start" but it fails to launch**
+    - type psm-gui status, if says PSM GUI is running or NOT running, your paths were established properly. It's just a matter of cage having issues, not the app.
+    - first thing to check for is seatd is installed and enabled
+        1) **pacman -Qs seatd** if it's not installed, **sudo pacman -S seatd**
+        2) enable it, **sudo systemctl enable --now seatd**, verify with  **systemctl status seatd** then **ls -l /run/seatd.sock**
+        3) run **id** you should see (seat) listed if not, **sudo usermod -aG seat <your_username>**
+    - if it still hasn't launched, you need fuse2 **sudo pacman -S fuse2**
+    - (My setup issues when installing from minimal Arch Linux, these two were required)
 
 ## Connecting to your server
 
