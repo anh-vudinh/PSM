@@ -155,6 +155,14 @@ gives a text table showing cpu,gpu,vram, ram utilization. Meant to just be used 
     - if it still hasn't launched, you need fuse2 **sudo pacman -S fuse2**
     - (My setup issues when installing from minimal Arch Linux, these two were required)
 
+2) **PSM monitor doesn't work?**
+    - You get the CPU and RAM readings but N/A for iGPU and SHRD with intel-gpu-tools installed? The solution for me was a lack of permissions to run intel-gpu-tools or specifically intel_gpu_top.
+      1) sudo EDITOR=/usr/bin/nano visudo -f /etc/sudoers.d/psm
+        - Run **lspci -D | grep -Ei 'VGA|3D|Display'**  the first field should be your GPU's PCI address, mine was 0000:00:02.0, <- replace that string with your own the \ are important to keep to prevent escape errors. The i915 is my Linux kernel's intel graphics driver, UHD 620. Yours may be different.
+        - paste this: <USERNAME HERE> ALL=(root) NOPASSWD: /usr/bin/cat /sys/kernel/debug/dri/0000\:00\:02.0/i915_gem_objects
+      2) **sudo setcap cap_perfmon+ep /usr/bin/intel_gpu_top**
+      3) psm-monitor start should now report the gpu
+
 ## Connecting to your server
 
 Open a world and look at the **Connect** box on the Overview tab. On the same PC, players
